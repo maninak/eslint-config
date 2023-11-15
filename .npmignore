@@ -1,0 +1,7 @@
+.vscode
+.editorconfig
+.gitattributes
+.gitignore
+.npmignore
+.npmrc
+tsconfig.*

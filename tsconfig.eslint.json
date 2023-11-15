@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false,
+ },
+  "extends": "./tsconfig.json",
+  "include": [
+    "./**.js",
+    "./**.esm",
+    "./**.cjs",
+    "./**/*.ts",
+    "./**/*.mts",
+    "./**/*.cts",
+    "./**/*.tsx",
+    "./**/*.vue",
+  ]
+}

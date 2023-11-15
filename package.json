@@ -1,0 +1,47 @@
+{
+  "version": "0.0.1",
+  "name": "@maninak/eslint-config",
+  "description": "A batteries-included, plug-n-play linter and formater aiming for maximum DX and minimum friction. Supports JS, TS, Vue, JSX, ...",
+  "author": "Konstantinos Maninakis <konstantinos.maninakis@sclable.com>",
+  "contributors": [
+    "Konstantinos Maninakis <konstantinos.maninakis@sclable.com>"
+  ],
+  "license": "./LICENSE",
+  "repository": "https://github.com/maninak/eslint-config",
+  "bugs": "https://github.com/maninak/eslint-config/issues?q=is%3Aissue+is%3Aopen+sort%3Aupdated-desc",
+  "engines": {
+    "npm": "^7"
+  },
+  "keywords": [
+    "eslint",
+    "prettier",
+    "eslint-config",
+    "maninak"
+  ],
+  "main": "./eslint.cjs",
+  "scripts": {
+    "preinstall": "npx -y only-allow pnpm",
+    "prepare": "husky install",
+    "verify-deps": "npx pnpm i --frozen-lockfile --prefer-offline",
+    "lint": "eslint . --ext .js,.esm,.cjs,.ts,.mts,.cts,.tsx,.vue --max-warnings 0 --cache --cache-location node_modules/.cache/eslint",
+    "prepublish": "npm run verify-deps && npm run lint"
+  },
+  "lint-staged": {
+    "*.{js,esm,cjs,ts,mts,cts,tsx,vue}": "eslint --fix --max-warnings 0 --cache --cache-location node_modules/.cache/eslint"
+  },
+  "dependencies": {
+    "@antfu/eslint-config": "^0.42.1",
+    "eslint": "^8.45.0",
+    "eslint-config-prettier": "^8.9.0",
+    "eslint-plugin-prettier-vue": "^4.2.0",
+    "eslint-plugin-tailwindcss": "^3.13.0",
+    "eslint-plugin-vue-scoped-css": "^2.5.0",
+    "typescript": "^5.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.9.0",
+    "husky": "^8.0.3",
+    "lint-staged": "^13.2.3"
+  },
+  "private": true
+}
