@@ -124,10 +124,11 @@ Add the following settings to your `.vscode/settings.json`:
 
   "eslint.experimental.useFlatConfig": true,
 
-  // Disable other formatters, use eslint instead
+  // Disable other linters/formatters, use eslint instead
   "prettier.enable": false,
   "editor.formatOnSave": false,
-  // Auto-fix eslint issues and auto-import missing on save
+  "tailwindCSS.validate": false,
+  // Auto fix eslint issues on save
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit",
     "source.organizeImports": "never"
