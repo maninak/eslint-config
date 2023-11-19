@@ -46,7 +46,7 @@ const antfu = require('@antfu/eslint-config').default
 module.exports = antfu()
 ``` -->
 
-Combined with legacy config:
+Combined with legacy ESLint config:
 
 ```js
 // eslint.config.js
@@ -79,12 +79,12 @@ module.exports = maninak(
 )
 ```
 
-> [!Tip]
-> Note that `.eslintignore` no longer works in Flat config. Use `ignores` (Flat config) or `excludedFiles` (legacy config).
+> [!IMPORTANT]
+> `.eslintignore` no longer works in Flat ESLint config. Use `ignores` (Flat config) or `excludedFiles` (legacy config).
 
 ### Add package.json Script
 
-For example:
+Merge this into to your `package.json`:
 
 ```json
 {
@@ -109,8 +109,9 @@ If you want to apply lint and auto-fix before every commit, you can add the foll
 }
 ```
 
-> [!TIP]
-> Make sure to check this if you are [migrating from husky](https://github.com/toplenboren/simple-git-hooks#when-migrating-from-husky-git-hooks-are-not-running)
+> [!IMPORTANT]
+> Make sure to [follow these steps](https://github.com/toplenboren/simple-git-hooks#when-migrating-from-husky-git-hooks-are-not-running)
+ if you are migrating from husky
 
 ### VS Code Support (in-editor <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(204, 167, 0);">squiggles</u>, 🛠️ auto fix, 📦 auto-import, ...)
 
@@ -167,7 +168,7 @@ Add the following settings to your `.vscode/settings.json`:
 
 Add the following to your `.gitattributes`:
 
-```
+```conf
 * text=auto eol=lf
 ```
 
@@ -175,7 +176,7 @@ Add the following to your `.gitattributes`:
 
 Add the following to your `.editorconfig`:
 
-```
+```conf
 # editorconfig.org
 root = true
 
@@ -280,7 +281,7 @@ const objectWantedToSort = {
 
 ### Plugins Renaming
 
-Since flat config requires us to explicitly provide the plugin names (instead of mandatory convention from npm package name), we renamed some plugins to make overall scope more consistent and easier to write.
+Since Flat ESLint config requires us to explicitly provide the plugin names (instead of mandatory convention from npm package name), we renamed some plugins to make overall scope more consistent and easier to write.
 
 | New Prefix | Original Prefix | Source Plugin |
 | --- | --- | --- |
