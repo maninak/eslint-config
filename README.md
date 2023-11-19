@@ -2,17 +2,17 @@
 
 >_No-sweat, lint and format everything_!
 
-Based on [`@antfu/eslint-config`](https://github.com/antfu/eslint-config/) with the following features:
-
-- Uses <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(204, 167, 0);">yellow squiggles</u> for most rules, important when your code is in WIP state, leaving the red color for <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(188, 22, 22);">important linting and typing issues</u>
-- Lints _and_ formats your code with **Prettier**
-- Supports JS, TS, JSX, Vue, JSON, YAML, Markdown, TailwindCss, Node.js, testing code ...
+- Goal: maximum DX, minimum distraction, auto-fix as much as possible! 🪄
+- Uses <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(204, 167, 0);">yellow squiggles</u> for most rules, important when your code is in WIP state, leaving the red color for the <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(188, 22, 22);">important linting and typing issues</u> you're actually interested in
+- Lints with **ESLint** _and_ formats your code with **Prettier**
+- Supports JS, TS, JSX, Vue, JSON, YAML, Markdown, TailwindCss, Node.js, testing code, ...
 - Infers eslintignore list from `.gitignore` by default
-- Single quotes, no semi, dangling commas, sorted imports
+- Spaces, single quotes, no semi, dangling commas, sorted imports
 - Auto-fix on save and on pre-commit
-- Auto-add missing imports on save
+- Auto-add missing imports (or remove unused ones) on save
 - Reasonable defaults, best practices, dead-simple config, single dep install
 - **Code style principle**: Minimal for reading, stable for diff, consistent, safe, strict
+- Based on [`@antfu/eslint-config`](https://github.com/antfu/eslint-config/)
 
 ## Usage
 
@@ -24,7 +24,9 @@ npm i -D @maninak/eslint-config
 
 ### Create config file
 
-With [`"type": "module"`](https://nodejs.org/api/packages.html#type) in `package.json` (recommended):
+#### In a Node.js repo with [`"type": "module"`](https://nodejs.org/api/packages.html#type)
+
+Just create an `esling.config.js` with the following contents and you're good to go!
 
 ```js
 import maninak from '@maninak/eslint-config'
@@ -34,7 +36,7 @@ export default maninak({
 })
 ```
 
-With CJS:
+#### In a CommonJS repo
 
 > [!NOTE]
 > Not supported yet. 🙆‍♂️
@@ -46,7 +48,7 @@ const antfu = require('@antfu/eslint-config').default
 module.exports = antfu()
 ``` -->
 
-Combined with legacy ESLint config:
+#### Combining ESLint Flat and legacy config formats for easier migration:
 
 ```js
 // eslint.config.js
@@ -55,7 +57,7 @@ import { FlatCompat } from '@eslint/eslintrc'
 
 module.exports = maninak(
   {
-    ignores: [],
+    typescript: { tsconfigPath: 'tsconfig.json' },
   },
 
   // Legacy config example
@@ -75,14 +77,14 @@ module.exports = maninak(
     ]
   }),
 
-  // Other Flat ESLint configs...
+  // Other flat ESLint configs...
 )
 ```
 
 > [!IMPORTANT]
-> `.eslintignore` no longer works in Flat ESLint config. Use `ignores` (Flat config) or `excludedFiles` (legacy config).
+> `.eslintignore` no longer works in flat ESLint config. Use `ignores` (flat config) or `excludedFiles` (legacy config).
 
-### Add package.json Script
+### Add package.json script
 
 Merge this into to your `package.json`:
 
@@ -94,7 +96,7 @@ Merge this into to your `package.json`:
 }
 ```
 
-### Lint git-staged Files on Pre-commit
+### Lint git-staged files on pre-commit
 
 If you want to apply lint and auto-fix before every commit, you can add the following to your `package.json`:
 
@@ -113,7 +115,7 @@ If you want to apply lint and auto-fix before every commit, you can add the foll
 > Make sure to [follow these steps](https://github.com/toplenboren/simple-git-hooks#when-migrating-from-husky-git-hooks-are-not-running)
  if you are migrating from husky
 
-### VS Code Support (in-editor <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(204, 167, 0);">squiggles</u>, 🛠️ auto fix, 📦 auto-import, ...)
+### VS Code Support (in-editor <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(204, 167, 0);">〰️ squiggles</u>, 🛠️ auto fix, 📦 auto-import, ...)
 
 Install [VS Code ESLint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint).
 
@@ -135,7 +137,7 @@ Add the following settings to your `.vscode/settings.json`:
     "source.organizeImports": "never"
   },
 
-  // Silent the stylistic rules in you IDE, but still auto fix them
+  // Silences the stylistic rules in you IDE, but will still auto-fix them
   "eslint.rules.customizations": [
     { "rule": "style/*", "severity": "off" },
     { "rule": "*-indent", "severity": "off" },
@@ -281,7 +283,7 @@ const objectWantedToSort = {
 
 ### Plugins Renaming
 
-Since Flat ESLint config requires us to explicitly provide the plugin names (instead of mandatory convention from npm package name), we renamed some plugins to make overall scope more consistent and easier to write.
+Since flat ESLint config requires us to explicitly provide the plugin names (instead of mandatory convention from npm package name), we renamed some plugins to make overall scope more consistent and easier to write.
 
 | New Prefix | Original Prefix | Source Plugin |
 | --- | --- | --- |
@@ -330,6 +332,12 @@ Sure, you can config and override rules locally in your project to fit your need
 ## Check Also
 
 - [maninak/ts-xor](https://github.com/maninak/ts-xor) - Compose custom types containing mutually exclusive keys
+
+## Links
+
+This library is [published on NPM](https://www.npmjs.com/package/@maninak/eslint-config).
+
+🫶 Follow me on [X](https://twitter.com/maninak_).
 
 ## License
 
