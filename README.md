@@ -2,15 +2,15 @@
 
 >_No-sweat, lint and format everything_!
 
-- Goal: maximum DX, minimum distraction, auto-fix as much as possible! 🪄
-- Uses <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(204, 167, 0);">yellow squiggles</u> for most rules, important when your code is in WIP state, leaving the red color for the <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(188, 22, 22);">important linting and typing issues</u> you're actually interested in
-- Lints with **ESLint** _and_ formats your code with **Prettier**
-- Supports JS, TS, JSX, Vue, JSON, YAML, Markdown, TailwindCss, Node.js, testing code, ...
-- Infers eslintignore list from `.gitignore` by default
+- Goal: maximum DX, minimum friction, auto-fix as much as possible! 🪄
+- Uses <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(204, 167, 0);">yellow squiggles</u> for most benign rules getting triggered while you're in the middle of writing new, unfinished code, leaving the red color for the <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(188, 22, 22);">important issues</u> needing your attention
+- Lints your code with **ESLint** _and_ formats it with **Prettier**
+- Supports JS, TS, Vue, JSX, JSON, YAML, Markdown, TailwindCSS, Node.js, Vitest, Jest, and many more ...
+- Infers eslintignore list from your `.gitignore` by default
 - Spaces, single quotes, no semi, dangling commas, sorted imports
-- Auto-fix on save and on pre-commit
-- Auto-add missing imports (or remove unused ones) on save
-- Reasonable defaults, best practices, dead-simple config, single dep install
+- Auto-fix on `CTRL + S` and on `git commit`
+- Auto-add missing imports on save (and remove unused ones)
+- Reasonable defaults, best practices, simple setup, single dep install
 - **Code style principle**: Minimal for reading, stable for diff, consistent, safe, strict
 - Based on [`@antfu/eslint-config`](https://github.com/antfu/eslint-config/)
 
@@ -24,9 +24,9 @@ npm i -D @maninak/eslint-config
 
 ### Create config file
 
-#### In a Node.js repo with [`"type": "module"`](https://nodejs.org/api/packages.html#type)
+#### ESM
 
-Just create an `esling.config.js` with the following contents and you're good to go!
+If you're in a repo using [`"type": "module"`](https://nodejs.org/api/packages.html#type) then create an `eslint.config.js` with the following contents:
 
 ```js
 import maninak from '@maninak/eslint-config'
@@ -36,53 +36,21 @@ export default maninak({
 })
 ```
 
-#### In a CommonJS repo
+#### CJS
+
 
 > [!NOTE]
 > Not supported yet. 🙆‍♂️
 
-<!-- ```js
-// eslint.config.js
-const antfu = require('@antfu/eslint-config').default
-
-module.exports = antfu()
-``` -->
-
-#### Combining ESLint Flat and legacy config formats for easier migration:
+<!-- Otherwise, use the following inside `eslint.config.js`:
 
 ```js
-// eslint.config.js
-import maninak from '@maninak/eslint-config'
-import { FlatCompat } from '@eslint/eslintrc'
+const maninak = require('@maninak/eslint-config').default
 
-module.exports = maninak(
-  {
-    typescript: { tsconfigPath: 'tsconfig.json' },
-  },
-
-  // Legacy config example
-  ...new FlatCompat().config({
-    extends: [
-      'eslint:recommended',
-      // Other extends...
-    ],
-    overrides: [
-      {
-        files: ['*.vue'],
-        extends: ['plugin:vue-scoped-css/vue3-recommended'],
-        parser: 'vue-eslint-parser',
-        parserOptions: { parser: '@typescript-eslint/parser' },
-        rules: { 'vue-scoped-css/no-deprecated-v-enter-v-leave-class': 'error' },
-      },
-    ]
-  }),
-
-  // Other flat ESLint configs...
-)
-```
-
-> [!IMPORTANT]
-> `.eslintignore` no longer works in flat ESLint config. Use `ignores` (flat config) or `excludedFiles` (legacy config).
+module.exports = maninak({
+  typescript: { tsconfigPath: 'tsconfig.json' },
+})
+``` -->
 
 ### Add package.json script
 
@@ -213,6 +181,54 @@ Consider adding the following to your `tsconfig.json` and fixing any issues that
 }
 ```
 
+## Migration
+
+### Automated
+
+The base package team provides an experimental CLI tool to help you migrate from the legacy ESLint config to the [new flat config](https://eslint.org/docs/latest/use/configure/configuration-files-new).
+
+Commit any unsaved changes and then run:
+
+```shell
+npx @antfu/eslint-config@latest
+```
+
+### Combining flat and legacy config formats
+
+```js
+// eslint.config.js
+import maninak from '@maninak/eslint-config'
+import { FlatCompat } from '@eslint/eslintrc'
+
+module.exports = maninak(
+  {
+    typescript: { tsconfigPath: 'tsconfig.json' },
+  },
+
+  // Legacy config example
+  ...new FlatCompat().config({
+    extends: [
+      'eslint:recommended',
+      // Other extends...
+    ],
+    overrides: [
+      {
+        files: ['*.vue'],
+        extends: ['plugin:vue-scoped-css/vue3-recommended'],
+        parser: 'vue-eslint-parser',
+        parserOptions: { parser: '@typescript-eslint/parser' },
+        rules: { 'vue-scoped-css/no-deprecated-v-enter-v-leave-class': 'error' },
+      },
+    ]
+  }),
+
+  // Other flat ESLint configs...
+)
+```
+
+> [!IMPORTANT]
+> `.eslintignore` no longer works in flat ESLint config. Use `ignores` (flat config) or `excludedFiles` (legacy config).
+
 ## Rule Overrides
 
 Certain rules would only be enabled in specific files, for example, `ts/*` rules would only be enabled in `.ts` files and `vue/*` rules would only be enabled in `.vue` files. If you want to override the rules, you need to specify the file extension:
@@ -239,7 +255,7 @@ export default maninak(
 )
 ```
 
-There's also provided an `overrides` options to make it easier:
+There's also an `overrides` options to make it easier:
 
 ```js
 // eslint.config.js
@@ -253,7 +269,6 @@ export default maninak({
     typescript: {
       'ts/consistent-type-definitions': ['error', 'interface'],
     },
-    yaml: {},
     // ...
   }
 })
@@ -261,7 +276,7 @@ export default maninak({
 
 ### Optional Extra Rules
 
-This config also provides some optional plugins/rules for extended usages.
+The config also provides some optional plugins/rules for extended usages.
 
 #### `perfectionist` (sorting)
 
@@ -283,7 +298,7 @@ const objectWantedToSort = {
 
 ### Plugins Renaming
 
-Since flat ESLint config requires us to explicitly provide the plugin names (instead of mandatory convention from npm package name), we renamed some plugins to make overall scope more consistent and easier to write.
+Since flat ESLint config requires us to explicitly provide the plugin names (instead of mandatory convention from npm package name), we renamed some plugins to make the overall scope more consistent and easier to write.
 
 | New Prefix | Original Prefix | Source Plugin |
 | --- | --- | --- |
@@ -294,7 +309,7 @@ Since flat ESLint config requires us to explicitly provide the plugin names (ins
 | `test/*` | `vitest/*` | [eslint-plugin-vitest](https://github.com/veritem/eslint-plugin-vitest) |
 | `test/*` | `no-only-tests/*` | [eslint-plugin-no-only-tests](https://github.com/levibuzolic/eslint-plugin-no-only-tests) |
 
-When you want to override rules, or disable them inline, you need to update to the new prefix:
+When you want to override rules or disable them inline, you need to update to the new prefix:
 
 ```diff
 -// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
@@ -332,10 +347,6 @@ Sure, you can config and override rules locally in your project to fit your need
 ## Check Also
 
 - [maninak/ts-xor](https://github.com/maninak/ts-xor) - Compose custom types containing mutually exclusive keys
-
-## Links
-
-This library is [published on NPM](https://www.npmjs.com/package/@maninak/eslint-config).
 
 🫶 Follow me on [X](https://twitter.com/maninak_).
 
