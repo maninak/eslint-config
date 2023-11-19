@@ -24,8 +24,6 @@ const prettierConfig = {
 }
 
 /** @type {[Parameters<typeof antfu>['0'], ...[Parameters<typeof antfu>['1'], ...Parameters<typeof antfu>['1'][]]]} */
-// @ts-expect-error Type '(filePath: string) => boolean' is not assignable to type 'string'.
-// (possibly due to bad typings of `FlatCompat().config()`)
 export default [
   {
     ignores: ['static', '.*', '!.*.*', 'LICENCE'],
