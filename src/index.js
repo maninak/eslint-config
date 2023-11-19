@@ -1,4 +1,3 @@
-import {maninak    } from './factory.js'
+import { maninak } from './factory.js'
 
 export default maninak
-

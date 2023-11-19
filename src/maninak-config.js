@@ -1,6 +1,7 @@
 import { FlatCompat } from '@eslint/eslintrc'
 import configPrettier from 'eslint-config-prettier'
 import pluginPrettier from 'eslint-plugin-prettier'
+import antfu, { GLOB_JS, GLOB_JSX, GLOB_TESTS, GLOB_TSX, GLOB_VUE } from '@antfu/eslint-config' // eslint-disable-line unused-imports/no-unused-imports
 
 const prettier = interopDefault(pluginPrettier)
 
@@ -22,9 +23,12 @@ const prettierConfig = {
   htmlWhitespaceSensitivity: 'ignore',
 }
 
-export default     [
+/** @type {[Parameters<typeof antfu>['0'], ...[Parameters<typeof antfu>['1'], ...Parameters<typeof antfu>['1'][]]]} */
+// @ts-expect-error Type '(filePath: string) => boolean' is not assignable to type 'string'.
+// (possibly due to bad typings of `FlatCompat().config()`)
+export default [
   {
-    ignores: ['static', '.*','!.*.*', 'LICENCE'],
+    ignores: ['static', '.*', '!.*.*', 'LICENCE'],
     stylistic: false,
     overrides: {
       typescript: {
@@ -227,8 +231,8 @@ export default     [
      * Rules for non-Vue files
      * ========================================================================================
      */
-    files: ['*'],
-    ignores: ['*.vue'],
+    files: ['**/*'],
+    ignores: [GLOB_VUE],
     plugins: { prettier },
     rules: {
       ...prettierRulesFixingConflictsWithEslint,
@@ -241,7 +245,7 @@ export default     [
      * Rules for shared utility function files
      * ========================================================================================
      */
-    files: ['*/utils/**/*.ts', '*/util/**/*.ts'],
+    files: ['**/utils/**/*.ts', '**/util/**/*.ts'],
     rules: {
       '@typescript-eslint/explicit-function-return-type': [
         'warn',
@@ -258,7 +262,7 @@ export default     [
      * Rules specifically for test files
      * ========================================================================================
      */
-    files: ['*.test.ts', '*.test.js', '*.spec.ts', '*.spec.js'],
+    files: [...GLOB_TESTS],
     rules: {
       // overrides to antfu's config follow
       'no-only-tests/no-only-tests': 'warn',
@@ -269,7 +273,7 @@ export default     [
      * Rules specifically for JavaScript config files
      * ========================================================================================
      */
-    files: ['.*.js', '*.config.js'],
+    files: ['**/.*.js', '**/*.config.js'],
     rules: {
       '@typescript-eslint/no-var-requires': 'off',
     },
@@ -279,7 +283,7 @@ export default     [
      * Rules specifically for standard JavaScript files
      * ========================================================================================
      */
-    files: ['*.js', '*.jsx'],
+    files: [GLOB_JS, GLOB_JSX],
     rules: {
       '@typescript-eslint/no-var-requires': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off',
@@ -290,7 +294,7 @@ export default     [
      * Rules specifically for ECMAScript module files
      * ========================================================================================
      */
-    files: ['*.esm', '*.mts'],
+    files: ['**/*.esm', '**/*.mts'],
     rules: {
       '@typescript-eslint/no-var-requires': 'error',
     },
@@ -300,7 +304,7 @@ export default     [
      * Rules specifically for TypeScript type declaration files
      * ========================================================================================
      */
-    files: ['*.d.ts'],
+    files: ['**/*.d.ts'],
     rules: {
       'id-length': 'off',
       'ts/no-explicit-any': 'off',
@@ -318,13 +322,14 @@ export default     [
     },
   },
   ...new FlatCompat().config({
+    root: true,
     overrides: [
       {
         /*
          * Rules for Vue files
          * ====================================================================================
          */
-        files: ['*.vue'],
+        files: [GLOB_VUE],
         extends: ['plugin:vue-scoped-css/vue3-recommended', 'plugin:prettier-vue/recommended'],
         parser: 'vue-eslint-parser',
         parserOptions: { parser: '@typescript-eslint/parser' },
@@ -407,7 +412,7 @@ export default     [
          * Rules for front-end component files
          * ====================================================================================
          */
-        files: ['*.vue', '*.jsx', '*.tsx'],
+        files: [GLOB_VUE, GLOB_JSX, GLOB_TSX],
         extends: ['plugin:tailwindcss/recommended'],
         plugins: ['tailwindcss'],
         rules: {
