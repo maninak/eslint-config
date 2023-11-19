@@ -1,17 +1,17 @@
 {
   "compilerOptions": {
-    "moduleResolution": "node",
-    "module": "commonjs",
-    "target": "ESNext",
-    "outDir": "dist",
-    "strict": true,
-    "isolatedModules": true,
+    "target": "es2020",
     "moduleDetection": "force",
-    "noUncheckedIndexedAccess": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
     "noFallthroughCasesInSwitch": true,
-    "forceConsistentCasingInFileNames": true,
     "noPropertyAccessFromIndexSignature": true,
-    "skipLibCheck": true,
+    "noUncheckedIndexedAccess": true,
+    "outDir": "dist",
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "skipLibCheck": true
   },
-  "exclude": ["node_modules", "dist"],
+  "exclude": ["node_modules", "dist"]
 }
