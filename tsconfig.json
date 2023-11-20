@@ -11,13 +11,13 @@
     "noPropertyAccessFromIndexSignature": true,
     "noUncheckedIndexedAccess": true,
     "declaration": true,
-    "outDir": "./dist",
+    "outDir": "dist",
     "sourceMap": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "eslint.config.js"],
+  "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
