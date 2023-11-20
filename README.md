@@ -2,7 +2,7 @@
 
 >_No-sweat, lint and format everything_!
 
-Goal: maximize DX, minimize friction, auto-fix as much as possible! 🪄
+Design goal: maximize DX, minimize friction, auto-fix as much as possible! 🪄
 
 - <span style="text-decoration: underline; text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(204, 167, 0);">Yellow squiggles</span> for most benign rules triggered while you're in the middle of writing new, unfinished code, leaving the <span style="text-decoration: underline; text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(188, 22, 22);">red squiggles</span> for the important issues needing your attention
 - Lints your code with **ESLint** _and_ formats it with **Prettier**
