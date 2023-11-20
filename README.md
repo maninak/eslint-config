@@ -2,10 +2,11 @@
 
 >_No-sweat, lint and format everything_!
 
-- Goal: maximum DX, minimum friction, auto-fix as much as possible! 🪄
-- Uses <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(204, 167, 0);">yellow squiggles</u> for most benign rules getting triggered while you're in the middle of writing new, unfinished code, leaving the red color for the <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(188, 22, 22);">important issues</u> needing your attention
+Goal: maximize DX, minimize friction, auto-fix as much as possible! 🪄
+
+- <span style="text-decoration: underline; text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(204, 167, 0);">Yellow squiggles</span> for most benign rules triggered while you're in the middle of writing new, unfinished code, leaving the <span style="text-decoration: underline; text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(188, 22, 22);">red squiggles</span> for the important issues needing your attention
 - Lints your code with **ESLint** _and_ formats it with **Prettier**
-- Supports JS, TS, Vue, JSX, JSON, YAML, Markdown, TailwindCSS, Node.js, Vitest, Jest, and many more ...
+- Supports JS, TS, Vue, JSX, JSON, YAML, Markdown, TailwindCSS, Node.js, Vitest, Jest, and more
 - Infers eslintignore list from your `.gitignore` by default
 - Spaces, single quotes, no semi, dangling commas, sorted imports
 - Auto-fix on `CTRL + S` and on `git commit`
@@ -24,7 +25,7 @@ npm i -D @maninak/eslint-config
 
 ### Create config file
 
-#### ESM
+ESM
 
 If you're in a repo using [`"type": "module"`](https://nodejs.org/api/packages.html#type) then create an `eslint.config.js` with the following contents:
 
@@ -36,8 +37,7 @@ export default maninak({
 })
 ```
 
-#### CJS
-
+CJS
 
 > [!NOTE]
 > Not supported yet. 🙆‍♂️
@@ -52,140 +52,16 @@ module.exports = maninak({
 })
 ``` -->
 
-### Add package.json script
-
-Merge this into to your `package.json`:
-
-```json
-{
-  "scripts": {
-    "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-location node_modules/.cache/eslint",
-  }
-}
-```
-
-### Lint git-staged files on pre-commit
-
-If you want to apply lint and auto-fix before every commit, you can add the following to your `package.json`:
-
-```json
-{
-  "simple-git-hooks": {
-    "pre-commit": "npx lint-staged"
-  },
-  "lint-staged": {
-    "*": "eslint --fix --max-warnings 0 --no-warn-ignored --cache --cache-location node_modules/.cache/eslint"
-  },
-}
-```
-
-> [!IMPORTANT]
-> Make sure to [follow these steps](https://github.com/toplenboren/simple-git-hooks#when-migrating-from-husky-git-hooks-are-not-running)
- if you are migrating from husky
-
-### VS Code Support (in-editor <u style="text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(204, 167, 0);">〰️ squiggles</u>, 🛠️ auto fix, 📦 auto-import, ...)
-
-Install [VS Code ESLint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint).
-
-Add the following settings to your `.vscode/settings.json`:
-
-```jsonc
-{
-  /* eslint-disable jsonc/sort-keys */
-
-  "eslint.experimental.useFlatConfig": true,
-
-  // Disable other linters/formatters, use eslint instead
-  "prettier.enable": false,
-  "editor.formatOnSave": false,
-  "tailwindCSS.validate": false,
-  // Auto fix eslint issues on save
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit",
-    "source.organizeImports": "never"
-  },
-
-  // Silences the stylistic rules in you IDE, but will still auto-fix them
-  "eslint.rules.customizations": [
-    { "rule": "style/*", "severity": "off" },
-    { "rule": "*-indent", "severity": "off" },
-    { "rule": "*-spacing", "severity": "off" },
-    { "rule": "*-spaces", "severity": "off" },
-    { "rule": "*-order", "severity": "off" },
-    { "rule": "*-dangle", "severity": "off" },
-    { "rule": "*-newline", "severity": "off" },
-    { "rule": "*quotes", "severity": "off" },
-    { "rule": "*semi", "severity": "off" }
-  ],
-
-  // Enable eslint for all supported languages
-  "eslint.validate": [
-    "javascript",
-    "javascriptreact",
-    "typescript",
-    "typescriptreact",
-    "vue",
-    "html",
-    "markdown",
-    "json",
-    "jsonc",
-    "yaml"
-  ],
-}
-```
-
-### Line-break consistency between Linux/Mac and Windows
-
-Add the following to your `.gitattributes`:
-
-```conf
-* text=auto eol=lf
-```
-
-### Cross-editor Support
-
-Add the following to your `.editorconfig`:
-
-```conf
-# editorconfig.org
-root = true
-
-[*]
-indent_style = space
-indent_size = 2
-end_of_line = lf
-charset = utf-8
-trim_trailing_whitespace = true
-insert_final_newline = true
-
-[*.md]
-trim_trailing_whitespace = false
-```
-
-### Stricter TypeScript checks
-
-Consider adding the following to your `tsconfig.json` and fixing any issues that pop up (or comment out hard-to-fix options):
-
-```jsonc
-{
-  "compilerOptions": {
-    "moduleDetection": "force",
-    "strict": true,
-    "noFallthroughCasesInSwitch": true,
-    "noPropertyAccessFromIndexSignature": true,
-    "noUncheckedIndexedAccess": true,
-    "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
-    "skipLibCheck": true
-  },
-}
-```
-
 ## Migration
+
+If you are still using ESLint's legacy config format it is strongly suggested that you migrate to the their [new flat config](https://eslint.org/docs/latest/use/configure/configuration-files-new).
+
+<details>
+<summary>Show more</summary>
 
 ### Automated
 
-The base package team provides an experimental CLI tool to help you migrate from the legacy ESLint config to the [new flat config](https://eslint.org/docs/latest/use/configure/configuration-files-new).
+The base package team provides an experimental CLI tool to help with the migration.
 
 Commit any unsaved changes and then run:
 
@@ -227,11 +103,143 @@ module.exports = maninak(
 ```
 
 > [!IMPORTANT]
-> `.eslintignore` no longer works in flat ESLint config. Use `ignores` (flat config) or `excludedFiles` (legacy config).
+> `.eslintignore` no longer works in the new flat ESLint config. Use `ignores` (flat config) or `excludedFiles` (legacy config).
+</details>
 
-## Rule Overrides
+## Suggested recipes
 
-Certain rules would only be enabled in specific files, for example, `ts/*` rules would only be enabled in `.ts` files and `vue/*` rules would only be enabled in `.vue` files. If you want to override the rules, you need to specify the file extension:
+It is strongly suggested that you apply all recipes.
+
+### Package.json script
+
+To lint all files on command, ideal also to run in your CI, merge this into to your `package.json`:
+
+```json
+{
+  "scripts": {
+    "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-location node_modules/.cache/eslint",
+  }
+}
+```
+
+> [!TIP]
+> To lint and auto-fix all files in your repo run:
+>
+> ```shell
+> npm run lint -- --fix
+> ```
+
+### Auto-lint changed files on git commit
+
+To automatically lint and auto-fix (only) all staged files before every commit, add the following to your `package.json`:
+
+```json
+{
+  "lint-staged": {
+    "*": "eslint --fix --max-warnings 0 --no-warn-ignored --cache --cache-location node_modules/.cache/eslint"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
+  },
+}
+```
+
+> [!IMPORTANT]
+> Make sure to [follow these steps](https://github.com/toplenboren/simple-git-hooks#when-migrating-from-husky-git-hooks-are-not-running)
+ if you are migrating from husky
+
+### VS Code Support
+
+To get in-editor <span style="text-decoration: underline; text-decoration-skip-ink: none; text-decoration-style: wavy; text-decoration-color: rgb(204, 167, 0);">squiggles</span>, auto-fix, auto-import and more follow the next steps.
+
+Install [VS Code ESLint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint).
+
+Add the following settings to your `.vscode/settings.json`:
+
+```jsonc
+{
+  /* eslint-disable jsonc/sort-keys */
+
+  "git.inputValidationSubjectLength": 72,
+
+  "eslint.experimental.useFlatConfig": true,
+
+  // Disable other linters/formatters, use eslint instead
+  "prettier.enable": false,
+  "editor.formatOnSave": false,
+  "tailwindCSS.validate": false,
+  // Auto fix eslint issues on save
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "never"
+  },
+
+  // Enable eslint for all supported languages
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "vue",
+    "html",
+    "markdown",
+    "json",
+    "jsonc",
+    "yaml",
+  ],
+}
+```
+
+### Line-break consistency between Linux/Mac and Windows
+
+Add the following to your `.gitattributes`:
+
+```conf
+* text=auto eol=lf
+```
+
+### Cross-editor Support
+
+Add the following to your `.editorconfig`:
+
+```conf
+# editorconfig.org
+root = true
+
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.md]
+trim_trailing_whitespace = false
+```
+
+### Stricter TypeScript checks
+
+Consider adding the following to your `tsconfig.json` and fixing any issues that pop up (or comment out hard-to-fix options):
+
+```jsonc
+{
+  "compilerOptions": {
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "strict": true
+  },
+}
+```
+
+## Configuration
+
+Certain rules only get enabled in specific files, for example, `ts/*` rules only get enabled in `.ts` files and `vue/*` rules only in `.vue` files. If you want to override the rules, you need to specify the file extension:
 
 ```js
 // eslint.config.js
@@ -246,7 +254,7 @@ export default maninak(
     },
   }
   {
-    // Remember to specify the file glob here, otherwise it might cause the vue plugin to handle non-vue files
+    // Remember to specify the file glob as done here, otherwise thise vue rule will try to run on non-vue files too
     files: ['**/*.vue'],
     rules: {
       'vue/operator-linebreak': ['error', 'before'],
@@ -255,7 +263,7 @@ export default maninak(
 )
 ```
 
-There's also an `overrides` options to make it easier:
+There's also an `overrides` property in the first param for ease of use:
 
 ```js
 // eslint.config.js
@@ -280,9 +288,7 @@ The config also provides some optional plugins/rules for extended usages.
 
 #### `perfectionist` (sorting)
 
-This plugin [`eslint-plugin-perfectionist`](https://github.com/azat-io/eslint-plugin-perfectionist) allows you to sorted object keys, imports, etc, with auto-fix.
-
-The plugin is installed but no rules are enabled by default.
+The plugin [`eslint-plugin-perfectionist`](https://github.com/azat-io/eslint-plugin-perfectionist) allows you to sorted object keys, imports, etc, with auto-fix. It's already installed for you but no rules are enabled by default.
 
 It's recommended to opt-in on each file individually using [configuration comments](https://eslint.org/docs/latest/use/configure/rules#using-configuration-comments-1).
 
