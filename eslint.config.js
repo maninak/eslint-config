@@ -1,4 +1,4 @@
-import maninak from './src/index.js'
+import maninak from './dist/index.js'
 
 export default maninak({
   ignores: ['*.md'],

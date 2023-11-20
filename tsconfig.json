@@ -1,18 +1,23 @@
 {
   "compilerOptions": {
     "target": "es2020",
+    "lib": ["es2022"],
     "moduleDetection": "force",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "es2020",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
     "strict": true,
     "noFallthroughCasesInSwitch": true,
     "noPropertyAccessFromIndexSignature": true,
     "noUncheckedIndexedAccess": true,
-    "outDir": "dist",
+    "declaration": true,
+    "outDir": "./dist",
+    "sourceMap": true,
+    "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["**/*"],
+  "include": ["src/**/*.ts", "eslint.config.js"],
   "exclude": ["node_modules", "dist"]
 }

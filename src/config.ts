@@ -1,17 +1,30 @@
+/* eslint-disable ts/no-unsafe-member-access */
+/* eslint-disable ts/no-unsafe-assignment */
 import { FlatCompat } from '@eslint/eslintrc'
-import configPrettier from 'eslint-config-prettier'
 import pluginPrettier from 'eslint-plugin-prettier'
-import antfu, { GLOB_JS, GLOB_JSX, GLOB_TESTS, GLOB_TSX, GLOB_VUE } from '@antfu/eslint-config' // eslint-disable-line unused-imports/no-unused-imports
+import type { Config as PrettierConfig } from 'prettier'
+import type antfu from '@antfu/eslint-config'
+import {
+  GLOB_JS,
+  GLOB_JSON,
+  GLOB_JSON5,
+  GLOB_JSONC,
+  GLOB_JSX,
+  GLOB_TESTS,
+  GLOB_TSX,
+  GLOB_VUE,
+} from '@antfu/eslint-config'
 
 const prettier = interopDefault(pluginPrettier)
 
-const prettierRulesFixingConflictsWithEslint = { ...interopDefault(configPrettier).rules }
+const prettierRulesFixingConflictsWithEslint = {
+  ...interopDefault(import('eslint-config-prettier')).rules,
+}
 delete prettierRulesFixingConflictsWithEslint['vue/html-self-closing']
 
 const maxColumnsPerLine = 95
 
-/** @type {import("prettier").Config} */
-const prettierConfig = {
+const prettierConfig: PrettierConfig = {
   printWidth: maxColumnsPerLine,
   useTabs: false,
   tabWidth: 2,
@@ -23,7 +36,6 @@ const prettierConfig = {
   htmlWhitespaceSensitivity: 'ignore',
 }
 
-/** @type {[Parameters<typeof antfu>['0'], ...[Parameters<typeof antfu>['1'], ...Parameters<typeof antfu>['1'][]]]} */
 export default [
   {
     ignores: ['static', '.*', '!.*.*', 'LICENCE'],
@@ -315,7 +327,11 @@ export default [
      * Rules specifically for JSON-type files
      * ========================================================================================
      */
+    files: [GLOB_JSON, GLOB_JSON5, GLOB_JSONC],
     rules: {
+      'max-len': 'off',
+
+      // overrides to antfu's config follow
       'jsonc/sort-keys': 'warn',
     },
   },
@@ -435,8 +451,13 @@ export default [
       },
     ],
   }),
+] satisfies [
+  Parameters<typeof antfu>['0'],
+  ...[Parameters<typeof antfu>['1'], ...Parameters<typeof antfu>['1'][]],
 ]
 
-function interopDefault(module) {
+// eslint-disable-next-line ts/no-explicit-any
+function interopDefault(module: any) {
+  // eslint-disable-next-line ts/no-unsafe-return
   return module.default || module
 }

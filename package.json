@@ -20,19 +20,32 @@
     "eslint-config",
     "maninak"
   ],
-  "main": "./src/index.js",
-  "module": "./src/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "engines": {
     "npm": "^7"
   },
   "scripts": {
     "preinstall": "npx -y only-allow pnpm",
     "verify-deps": "npx pnpm i --frozen-lockfile --prefer-offline",
+    "build": "tsup src/index.ts --format esm,cjs --sourcemap --clean",
+    "postbuild": "tsc --emitDeclarationOnly && cp ./dist/index.d.ts ./dist/index.d.cts",
     "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-location node_modules/.cache/eslint",
-    "prepublish": "npm run verify-deps && npm run lint"
+    "test": "npm run test:package",
+    "test:package": "publint",
+    "preversion": "npm run build && npm test",
+    "prepublish": "npm run verify-deps && npm run lint",
+    "postpublish": "git push --tags"
   },
   "dependencies": {
     "@antfu/eslint-config": "^2.0.0",
+    "@eslint/eslintrc": "^2.1.3",
     "eslint": "^8.54.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-prettier": "^5.0.1",
@@ -48,7 +61,10 @@
   "devDependencies": {
     "@types/eslint-config-prettier": "^6.11.3",
     "@types/eslint__eslintrc": "^2.1.1",
-    "@types/node": "^20.9.2"
+    "@types/node": "^20.9.2",
+    "eslint-define-config": "link:@@antfu/eslint-define-config",
+    "publint": "^0.2.5",
+    "tsup": "^8.0.0"
   },
   "simple-git-hooks": {
     "pre-commit": "npx lint-staged"
