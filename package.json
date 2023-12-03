@@ -4,9 +4,6 @@
   "version": "0.1.3",
   "description": "A batteries-included, plug-n-play linter and formater aiming for maximum DX and minimum friction. Supports JS, TS, Vue, JSX, ...",
   "author": "Kostis Maninakis <maninak@protonmail.com> (https://maninak.github.io)",
-  "contributors": [
-    "Konstantinos Maninakis <konstantinos.maninakis@sclable.com>"
-  ],
   "license": "MIT",
   "homepage": "https://github.com/maninak/eslint-config#README.md",
   "repository": {
