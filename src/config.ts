@@ -257,7 +257,7 @@ export default [
      */
     files: ['**/utils/**/*.ts', '**/util/**/*.ts'],
     rules: {
-      '@typescript-eslint/explicit-function-return-type': [
+      'ts/explicit-function-return-type': [
         'warn',
         {
           allowExpressions: true,
@@ -285,7 +285,7 @@ export default [
      */
     files: ['**/.*.js', '**/*.config.js'],
     rules: {
-      '@typescript-eslint/no-var-requires': 'off',
+      'ts/no-var-requires': 'off',
     },
   },
   {
@@ -295,8 +295,8 @@ export default [
      */
     files: [GLOB_JS, GLOB_JSX],
     rules: {
-      '@typescript-eslint/no-var-requires': 'off',
-      '@typescript-eslint/explicit-function-return-type': 'off',
+      'ts/no-var-requires': 'off',
+      'ts/explicit-function-return-type': 'off',
     },
   },
   {
@@ -306,7 +306,7 @@ export default [
      */
     files: ['**/*.esm', '**/*.mts'],
     rules: {
-      '@typescript-eslint/no-var-requires': 'error',
+      'ts/no-var-requires': 'error',
     },
   },
   {
