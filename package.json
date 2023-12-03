@@ -1,7 +1,7 @@
 {
   "name": "@maninak/eslint-config",
   "type": "module",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A batteries-included, plug-n-play linter and formater aiming for maximum DX and minimum friction. Supports JS, TS, Vue, JSX, ...",
   "author": "Kostis Maninakis <maninak@protonmail.com> (https://maninak.github.io)",
   "contributors": [
