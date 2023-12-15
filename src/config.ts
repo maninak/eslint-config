@@ -211,6 +211,8 @@ export default [
       'max-statements-per-line': 'warn',
       'no-empty': ['warn', { allowEmptyCatch: true }],
       'no-multiple-empty-lines': ['warn', { max: 1, maxBOF: 0, maxEOF: 1 }],
+      'no-useless-return': 'warn',
+      'no-undef-init': 'warn',
 
       /*
        * Rules implemented by `eslint-plugin-unused-imports` follow
@@ -227,7 +229,7 @@ export default [
       'antfu/if-newline': 'warn',
       'antfu/import-dedupe': 'warn',
       'antfu/top-level-function': 'warn',
-      'antfu/generic-spacing': 'warn',
+      // 'antfu/generic-spacing': 'warn', // TODO: maninak uncomment and find out why this no longer resolves
 
       /*
        * Rules implemented by `eslint-plugin-react` follow
@@ -275,7 +277,7 @@ export default [
     files: [...GLOB_TESTS],
     rules: {
       // overrides to antfu's config follow
-      'no-only-tests/no-only-tests': 'warn',
+      // 'no-only-tests/no-only-tests': 'warn', // TODO: maninak uncomment and find out why this no longer resolves
     },
   },
   {

@@ -28,4 +28,7 @@
     "jsonc",
     "yaml",
   ],
+  "conventionalCommits.scopes": [
+    "config"
+  ],
 }

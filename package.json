@@ -41,7 +41,7 @@
     "postpublish": "git push --tags"
   },
   "dependencies": {
-    "@antfu/eslint-config": "^2.0.0",
+    "@antfu/eslint-config": "~2.0.0",
     "@eslint/eslintrc": "^2.1.3",
     "eslint": "^8.54.0",
     "eslint-config-prettier": "^9.0.0",
