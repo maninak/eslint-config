@@ -5,19 +5,34 @@
     "moduleDetection": "force",
     "module": "es2020",
     "moduleResolution": "Bundler",
+    "types": ["node"],
     "allowJs": true,
     "strict": true,
     "noFallthroughCasesInSwitch": true,
     "noPropertyAccessFromIndexSignature": true,
     "noUncheckedIndexedAccess": true,
-    "declaration": true,
-    "outDir": "dist",
     "sourceMap": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "verbatimModuleSyntax": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "isolatedModules": true,
+    "noImplicitOverride": true,
+    "useUnknownInCatchVariables": true,
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+    "incremental": true,
+    "tsBuildInfoFile": "node_modules/.cache/typescript/.tsbuildinfo"
   },
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "types/**/*.d.ts",
+    "scripts/**/*.ts",
+    "eslint.config.mjs",
+    "vitest.config.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

@@ -1,9 +1,8 @@
 {
   /* eslint-disable jsonc/sort-keys */
 
+  "git.inputValidation": true,
   "git.inputValidationSubjectLength": 72,
-
-  "eslint.experimental.useFlatConfig": true,
 
   // Disable other linters/formatters, use eslint instead
   "prettier.enable": false,
