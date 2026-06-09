@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 
-// To be run as the `preinstall` lifecycle hook in a repo.
-// Enforces that contributors use pnpm so the lockfile stays in sync. Exits silently
-// when the package is being installed as a dependency in someone else's project,
-// so we never block consumers who happen to use npm or yarn.
+// Enforces pnpm for contributors of this repo so the lockfile stays in sync.
+// No-op when this package is installed as a dependency.
 
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'

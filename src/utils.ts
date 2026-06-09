@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 /**
@@ -73,4 +73,11 @@ function readConsumerPackageJson(): PackageJsonDeps | undefined {
   } catch {
     return undefined
   }
+}
+
+/**
+ * True when the consumer's cwd has a `tsconfig.json` at its root.
+ */
+export function hasConsumerTsconfig(): boolean {
+  return existsSync(path.join(process.cwd(), 'tsconfig.json'))
 }

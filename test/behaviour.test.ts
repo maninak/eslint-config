@@ -3,7 +3,7 @@ import { lintFixture, withCwd } from './helpers.js'
 
 const tsFixture = 'test/fixtures/typescript.ts'
 const typeAwareFixture = 'test/fixtures/type-aware.ts'
-const tsOptions = { typescript: { tsconfigPath: './tsconfig.json' } }
+const tsOptions = { typescript: { tsconfigPath: 'test/fixtures/tsconfig.json' } }
 
 /*
  * Behavioural tests for non-auto-fixable rules.
@@ -73,6 +73,47 @@ describe('type-aware rules fire when tsconfigPath is set', () => {
 
   it('ts/promise-function-async flags a non-async Promise-returning function', async () => {
     const msgs = await lintFixture(typeAwareFixture, tsOptions)
+
+    expect(msgs).toContainEqual(
+      expect.objectContaining({ ruleId: 'ts/promise-function-async' }),
+    )
+  })
+})
+
+describe('type-aware rules auto-activate when tsconfig.json sits at cwd', () => {
+  it('ts/promise-function-async fires without an explicit tsconfigPath', async () => {
+    const msgs = await withCwd(
+      'test/fixtures/multi-ts',
+      async () => await lintFixture('src/source.ts'),
+    )
+
+    expect(msgs).toContainEqual(
+      expect.objectContaining({ ruleId: 'ts/promise-function-async' }),
+    )
+  })
+})
+
+describe('tsconfigPath as an array unlocks non-standard tsconfig names', () => {
+  async function lintMultiTs(file: string): Promise<Awaited<ReturnType<typeof lintFixture>>> {
+    return await withCwd(
+      'test/fixtures/multi-ts',
+      async () =>
+        await lintFixture(file, {
+          typescript: { tsconfigPath: ['./tsconfig.json', './tsconfig.wdio.json'] },
+        }),
+    )
+  }
+
+  it('type-aware rules fire on files covered by the first tsconfig', async () => {
+    const msgs = await lintMultiTs('src/source.ts')
+
+    expect(msgs).toContainEqual(
+      expect.objectContaining({ ruleId: 'ts/promise-function-async' }),
+    )
+  })
+
+  it('type-aware rules fire on files covered only by a non-standard tsconfig', async () => {
+    const msgs = await lintMultiTs('e2e/spec.ts')
 
     expect(msgs).toContainEqual(
       expect.objectContaining({ ruleId: 'ts/promise-function-async' }),

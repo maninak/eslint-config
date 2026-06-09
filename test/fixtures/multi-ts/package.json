@@ -1,0 +1,7 @@
+{
+  "name": "multi-ts-fixture",
+  "private": true,
+  "devDependencies": {
+    "typescript": "*"
+  }
+}

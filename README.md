@@ -3,6 +3,7 @@
 > _No-sweat, lint and format everything_! 🪄
 
 [![Sponsor on Liberapay](https://img.shields.io/liberapay/patrons/maninak.svg?logo=liberapay)](https://liberapay.com/maninak/donate)
+[![rad: - z22BzXnj6B9PmE6P5Gg67XCDURPzB](https://img.shields.io/static/v1?label=rad%3A&message=z22BzXnj6B9PmE6P5Gg67XCDURPzB&color=6666FF&logo=radicle&logoColor=FFFFFF&cacheSeconds=64800)](https://app.radicle.at/nodes/seed.radicle.at/rad:z22BzXnj6B9PmE6P5Gg67XCDURPzB)
 
 ## Features
 
@@ -12,42 +13,34 @@ An opinionated, holistic lint-and-format suite designed to have your back, clean
 - Opts for spaces, single quotes, no semi, dangling commas (or whatever you'll set as an override)
 - Optimized for TS, Vue, TailwindCSS, Node.js, Vitest
 - Auto-fix most issues on `CTRL + S` and on `git commit`
-- Auto-add missing imports on save (and remove unused ones)
-- Infers eslintignore list from your `.gitignore` by default
+- Auto-add missing imports, sort, and group them on save (and auto-remove unused ones)
+- Infers eslintignore list from your `.gitignore`
+- Dual support fo both ESM and CJS projects
 - Based on [`@antfu/eslint-config`](https://github.com/antfu/eslint-config/)
 
 ## Supports
 
 | Technology                                                       | Status |
 | ---------------------------------------------------------------- | ------ |
-| JavaScript                                                       | ✅     |
-| TypeScript                                                       | ✅     |
-| Vue 3                                                            | ✅     |
-| Nuxt                                                             | ✅     |
-| React                                                            | ✅     |
-| Next.js                                                          | ✅     |
+| JavaScript / TypeScript                                          | ✅     |
+| Vue (detected version specific rules) / Nuxt / scoped CSS        | ✅     |
+| React / Next.js                                                  | ✅     |
 | Svelte                                                           | ✅     |
 | JSX / TSX                                                        | ✅     |
 | Node.js                                                          | ✅     |
 | JSON / JSONC / JSON5                                             | ✅     |
-| YAML                                                             | ✅     |
-| TOML                                                             | ✅     |
+| YAML / TOML                                                      | ✅     |
 | Markdown                                                         | ✅     |
 | Test files (Vitest, Jest, Playwright, WDIO, Mocha, Jasmine, ...) | ✅     |
 | Tailwind CSS                                                     | ✅     |
-| Vue scoped CSS                                                   | ✅     |
 
 ## Setup
-
-> _Works out of the box for JavaScript-only projects with no `tsconfig.json`. Type-aware rules activate only when you pass a `tsconfigPath` (see [Customization](#customization))._
 
 ### 1. Install
 
 ```bash
-npm install -D @maninak/eslint-config eslint
+npm install -D @maninak/eslint-config eslint@^9.10.0
 ```
-
-> _`eslint` is installed alongside so the VS Code ESLint extension and any local `eslint` CLI invocation can resolve it. Under pnpm 11's default isolated `node_modules`, transitive dependencies are not hoisted, so a direct install is needed here._
 
 ### 2. Create config file
 
@@ -72,12 +65,7 @@ Add the following to your `package.json` for local and CI invocation:
 }
 ```
 
-> [!TIP]
-> To lint and auto-fix all files in your repo run:
->
-> ```shell
-> npm run lint -- --fix
-> ```
+> _To lint and auto-fix all files: `npm run lint -- --fix`._
 
 ### 4. VS Code Support
 
@@ -134,8 +122,6 @@ Create a `.gitattributes` file in your project root to ensure consistent line en
 
 ```gitattributes
 * text=auto eol=lf
-*.{cmd,[cC][mM][dD]} text eol=crlf
-*.{bat,[bB][aA][tT]} text eol=crlf
 ```
 
 Commit this file to your repo.
@@ -168,7 +154,7 @@ The three groups below are independently useful. Group A is the minimum to get t
 ```jsonc
 {
   "compilerOptions": {
-    // -- A. Needed for the type-aware rules in this config --
+    // -- A. Needed to support the type-aware rules in this config --
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -186,7 +172,7 @@ The three groups below are independently useful. Group A is the minimum to get t
     "allowUnusedLabels": false,
     "allowUnreachableCode": false,
 
-    // -- C. Performance --
+    // -- C. Suggested performance options --
     "skipLibCheck": true,
     "incremental": true,
     "tsBuildInfoFile": "node_modules/.cache/typescript/.tsbuildinfo",
@@ -238,59 +224,52 @@ import maninak from '@maninak/eslint-config'
 
 export default maninak(
   {
-    // Point to TypeScript project(s) for type-aware linting rules.
-    // Required when your tsconfig does not cover all linted files
-    // (e.g. test files have their own tsconfig).
-    typescript: {
-      tsconfigPath: ['./tsconfig.json', './test/tsconfig.test.json'],
-    },
-
     // Files and directories to exclude from linting (added to the built-in ignores)
-    ignores: ['generated/**', 'src/webviews'],
+    ignores: ['generated/**', 'src/deprecated'],
   },
 
-  // Additional flat config objects, merged after the maninak config
+  // Additional ESLint flat config objects, merged after the maninak config
   {
     files: ['src/myModule.ts'],
-    rules: {
-      'ts/no-explicit-any': 'off',
-    },
+    rules: { 'ts/no-explicit-any': 'off' },
   },
 )
 ```
 
 All [antfu/eslint-config options](https://github.com/antfu/eslint-config#customization) are forwarded. See their docs for the full list.
 
-### Multiple tsconfig projects
+### Multiple tsconfig files
 
-When different parts of your codebase use different TypeScript configs (e.g. source files and test files):
+A `tsconfig.json` at your project root activates type-aware linting automatically. From there, TypeScript's project service auto-discovers any nested file also literally named `tsconfig.json` (e.g. `./tsconfig.json` for source, `./test/tsconfig.json` for tests). No wiring needed:
 
 ```js
-// eslint.config.mjs
-import maninak from '@maninak/eslint-config'
-
 export default maninak({
+  // implicit default when `./tsconfig.json` exists; set explicitly only to override
   typescript: {
-    tsconfigPath: [
-      './tsconfig.json', // source files
-      './test/tsconfig.test.json', // test files
-    ],
+    tsconfigPath: './tsconfig.json',
   },
 })
 ```
+
+Auto-discovery is name-strict: a file like `tsconfig.test.json` or `tsconfig.wdio.json` is invisible to it. Either rename the file to `tsconfig.json` in its own directory, or list every config explicitly as an array:
+
+```js
+export default maninak({
+  typescript: {
+    tsconfigPath: ['./tsconfig.json', './test/e2e/tsconfig.wdio.json'],
+  },
+})
+```
+
+The array form is also a handy escape hatch for a single config with a non-standard name.
 
 ### Optional: Vue accessibility rules
 
 Vue a11y rules are off by default. Enable them for projects that ship accessible UI components:
 
 ```js
-// eslint.config.mjs
-import maninak from '@maninak/eslint-config'
-
 export default maninak({
-  vue: {
-    accessibility: true,
-  },
+  vue: { accessibility: true },
 })
 ```
 
@@ -301,9 +280,6 @@ export default maninak({
 Off by default. Enabling it requires JSDoc on `export`ed declarations under conventional reusable-utility paths like `utils/`, `lib/`, etc. Opt in with:
 
 ```ts
-// eslint.config.mjs
-import maninak from '@maninak/eslint-config'
-
 export default maninak({
   requireJsdocInUtils: true,
 })
@@ -314,9 +290,6 @@ export default maninak({
 If you prefer to handle formatting outside ESLint:
 
 ```js
-// eslint.config.mjs
-import maninak from '@maninak/eslint-config'
-
 export default maninak(
   {
     /* main options */
