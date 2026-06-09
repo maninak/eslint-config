@@ -27,6 +27,22 @@ export interface ManinakExtraOptions {
 }
 
 /**
+ * Maninak's public options type. Extends antfu's `OptionsConfig` with `ManinakExtraOptions`
+ * and widens `typescript.tsconfigPath` to accept a string array. antfu only accepts a single
+ * string (it feeds it into `projectService.defaultProject`), but the maninak factory detects
+ * an array and switches the resulting parser blocks to legacy `parserOptions.project` mode,
+ * which natively accepts multiple paths.
+ */
+export type ManinakOptions = Omit<OptionsConfig, 'typescript'> &
+  ManinakExtraOptions & {
+    typescript?:
+      | boolean
+      | (Omit<OptionsTypescript, 'tsconfigPath'> & {
+          tsconfigPath?: string | string[]
+        })
+  }
+
+/**
  * Build the final ESLint flat config array using the maninak preset.
  *
  * Wraps antfu's factory with the maninak ruleset and, when the consumer has Nuxt
@@ -77,7 +93,7 @@ export interface ManinakExtraOptions {
  * ```
  */
 export async function maninak(
-  options: OptionsConfig & ManinakExtraOptions = {},
+  options: ManinakOptions = {},
   ...userConfigs: Parameters<typeof antfu>['1'][]
 ): Promise<TypedFlatConfigItem[]> {
   const { requireJsdocInUtils = false, ...antfuOptions } = options
@@ -120,19 +136,16 @@ export async function maninak(
  *    deps activates type-aware linting silently.
  */
 function resolveTsconfigPaths(
-  typescriptOption: OptionsConfig['typescript'],
+  typescriptOption: ManinakOptions['typescript'],
 ): string[] | undefined {
   if (typescriptOption === false) {
     return undefined
   }
-  const tsObject: OptionsTypescript =
-    typeof typescriptOption === 'object' ? typescriptOption : {}
-  const explicit = (tsObject as { tsconfigPath?: unknown }).tsconfigPath
+  const tsObject = typeof typescriptOption === 'object' ? typescriptOption : {}
+  const explicit = tsObject.tsconfigPath
 
   if (Array.isArray(explicit)) {
-    const paths = explicit.filter(
-      (item): item is string => typeof item === 'string' && item.length > 0,
-    )
+    const paths = explicit.filter((item): item is string => item.length > 0)
 
     return paths.length > 0 ? paths : undefined
   }

@@ -38,11 +38,11 @@
     "build": "tsup src/index.ts --format esm,cjs --sourcemap --clean",
     "postbuild": "tsc -p tsconfig.build.json --emitDeclarationOnly && cp ./dist/index.d.ts ./dist/index.d.cts",
     "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-location node_modules/.cache/eslint",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:package": "publint",
-    "preversion": "npm run verify-deps && npm run lint && npm run test && npm run build && npm run test:package",
-    "prepublishOnly": "npm run build && npm run test:package",
+    "test": "npm run test:unit && npm run test:typings",
+    "test:unit": "vitest run",
+    "test:typings": "tsc -p tsconfig.typecheck.json --noEmit",
+    "preversion": "npm run verify-deps && npm run lint && npm run test && npm run build && publint",
+    "prepublishOnly": "npm run build && publint",
     "postpublish": "git push --tags"
   },
   "peerDependencies": {
