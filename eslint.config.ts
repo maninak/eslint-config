@@ -1,5 +1,4 @@
-// eslint-disable-next-line antfu/no-import-dist
-import maninak from './dist/index.js'
+import maninak from './src/index.js'
 
 export default maninak({
   ignores: ['test/fixtures/**'],
