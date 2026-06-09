@@ -18,6 +18,7 @@ import { FlatCompat } from '@eslint/eslintrc'
 import pluginStylistic from '@stylistic/eslint-plugin'
 import pluginJasmine from 'eslint-plugin-jasmine'
 import pluginPrettier from 'eslint-plugin-prettier'
+import pluginVueScopedCss from 'eslint-plugin-vue-scoped-css'
 import { getConsumerVueVersion, isInConsumerDeps } from './utils.js'
 
 const prettier = interopDefault(pluginPrettier)
@@ -532,8 +533,11 @@ export default function buildConfig() {
         'max-len': 'off',
       },
     },
+    ...(isInConsumerDeps('vue')
+      ? (pluginVueScopedCss.configs.recommended as TypedFlatConfigItem[])
+      : []),
     // FlatCompat below is used exclusively for plugins that do not yet support ESLint flat config:
-    // eslint-plugin-vue-scoped-css, eslint-plugin-prettier-vue, and eslint-plugin-tailwindcss.
+    // eslint-plugin-prettier-vue and eslint-plugin-tailwindcss.
     // TODO: Migrate each block to native flat config once the underlying plugin publishes flat support.
     /* eslint-disable ts/no-explicit-any -- FlatCompat is loose-typed; tightening would require manual schemas. */
     ...(new FlatCompat().config({
@@ -547,10 +551,7 @@ export default function buildConfig() {
                  * ============================================================================
                  */
                 files: [GLOB_VUE],
-                extends: [
-                  'plugin:vue-scoped-css/vue3-recommended',
-                  'plugin:prettier-vue/recommended',
-                ],
+                extends: ['plugin:prettier-vue/recommended'],
                 parser: 'vue-eslint-parser',
                 parserOptions: { parser: '@typescript-eslint/parser' },
                 rules: {

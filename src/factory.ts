@@ -4,7 +4,7 @@ import type {
   TypedFlatConfigItem,
 } from '@antfu/eslint-config'
 import antfu from '@antfu/eslint-config'
-import merge from 'ts-deepmerge'
+import { merge } from 'ts-deepmerge'
 import buildConfig, { requireJsdocInUtilsBlocks } from './config.js'
 import { hasConsumerTsconfig, isInConsumerDeps } from './utils.js'
 
