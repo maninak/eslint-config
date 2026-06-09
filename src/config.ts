@@ -427,6 +427,15 @@ export default function buildConfig() {
     },
     {
       /*
+       * Prettier parser override for known files that use JSONC semantics (trailing commas,
+       * comments) despite the `.json` extension.
+       * ======================================================================================
+       */
+      files: ['**/tsconfig*.json', '**/jsconfig*.json', '**/.vscode/*.json'],
+      rules: { 'prettier/prettier': ['warn', { ...prettierConfig, parser: 'jsonc' }] },
+    },
+    {
+      /*
        * Rules for shared utility function files
        * ======================================================================================
        */
