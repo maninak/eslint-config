@@ -2,7 +2,7 @@
   "name": "@maninak/eslint-config",
   "type": "module",
   "version": "0.2.0",
-  "description": "A batteries-included, plug-n-play linter and formater aiming for maximum DX and minimum friction. Supports JS, TS, Vue, JSX, ...",
+  "description": "A batteries-included lint-and-format suite for maximum DX and minimum friction. Supports JS, TS, Vue, JSX, and more.",
   "author": "Kostis Maninakis <maninak@protonmail.com> (https://maninak.github.io)",
   "license": "MIT",
   "homepage": "https://github.com/maninak/eslint-config#README.md",
