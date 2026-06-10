@@ -381,8 +381,8 @@ export default function buildConfig() {
         'antfu/if-newline': 'warn',
         'antfu/import-dedupe': 'warn',
         'antfu/top-level-function': 'warn',
-        'antfu/consistent-chaining': 'warn', // new in antfu-plugin v3
-        'antfu/consistent-list-newline': 'warn', // new in antfu-plugin v3
+        'antfu/consistent-chaining': 'warn',
+        'antfu/consistent-list-newline': ['warn', { CallExpression: false }], // conflict with prettier
         // antfu/curly is declared at the top of this rules block (near its sibling curly rule)
 
         /*
