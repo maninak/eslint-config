@@ -2,7 +2,10 @@
 
 > _No-sweat, lint and format everything_! 🪄
 
-[![Sponsor on Liberapay](https://img.shields.io/liberapay/patrons/maninak.svg?logo=liberapay)](https://liberapay.com/maninak/donate)
+[![Sponsor maninak on Liberapay](https://img.shields.io/liberapay/patrons/maninak.svg?logo=liberapay)](https://liberapay.com/maninak/donate)
+[![NPM downloads per week](https://img.shields.io/npm/dw/@maninak/eslint-config.svg)](https://npm-stat.com/charts.html?package=%40maninak%2Feslint-config)
+[![Repos depending on @maninak/eslint-config](https://badgen.net/github/dependents-repo/maninak/eslint-config?color=blue)](https://github.com/maninak/eslint-config/network/dependents)
+[![Github stars](https://badgen.net/github/stars/maninak/eslint-config)](https://github.com/maninak/eslint-config/stargazers)
 [![rad: - z22BzXnj6B9PmE6P5Gg67XCDURPzB](https://img.shields.io/static/v1?label=rad%3A&message=z22BzXnj6B9PmE6P5Gg67XCDURPzB&color=6666FF&logo=radicle&logoColor=FFFFFF&cacheSeconds=64800)](https://app.radicle.at/nodes/seed.radicle.at/rad:z22BzXnj6B9PmE6P5Gg67XCDURPzB)
 
 ## Features
