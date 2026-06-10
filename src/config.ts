@@ -10,6 +10,7 @@ import {
   GLOB_JSON5,
   GLOB_JSONC,
   GLOB_JSX,
+  GLOB_SVELTE,
   GLOB_TESTS,
   GLOB_TSX,
   GLOB_VUE,
@@ -419,7 +420,7 @@ export default function buildConfig() {
        * ======================================================================================
        */
       files: ['**/*'],
-      ignores: [GLOB_VUE],
+      ignores: [GLOB_VUE, GLOB_SVELTE],
       plugins: { prettier },
       rules: {
         ...prettierRulesFixingConflictsWithEslint,
@@ -689,7 +690,7 @@ export default function buildConfig() {
           ] as TypedFlatConfigItem[]),
           {
             name: 'maninak/tailwindcss/overrides',
-            files: [GLOB_VUE, GLOB_JSX, GLOB_TSX],
+            files: [GLOB_VUE, GLOB_JSX, GLOB_TSX, GLOB_SVELTE],
             rules: {
               'tailwindcss/no-custom-classname': 'off',
             },
