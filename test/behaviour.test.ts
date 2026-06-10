@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lintFixture, withCwd } from './helpers.js'
+import { lintFixture, resolveRule, withCwd } from './helpers.js'
 
 const tsFixture = 'test/fixtures/typescript.ts'
 const typeAwareFixture = 'test/fixtures/type-aware.ts'
@@ -230,5 +230,30 @@ describe('jsdoc/require-jsdoc (opt-in via requireJsdocInUtils)', () => {
     const matching = msgs.filter((msg) => msg.ruleId === 'jsdoc/require-jsdoc')
 
     expect(matching).toEqual([])
+  })
+})
+
+describe('prettier-vue rules fire on .vue files', () => {
+  it('prettier-vue/prettier flags formatting issues', async () => {
+    const msgs = await withCwd(
+      'test/fixtures/vue-project',
+      async () => await lintFixture('Component.vue'),
+    )
+
+    expect(msgs).toContainEqual(expect.objectContaining({ ruleId: 'prettier-vue/prettier' }))
+  })
+})
+
+describe('tailwindcss rules are registered on .vue files when tailwindcss is a dep', () => {
+  it('tailwindcss/classnames-order is active', async () => {
+    // Checking rule registration rather than linting a file: running the rule requires a live
+    // tailwindcss install in the fixture cwd, which would make this an integration test.
+    const severity = await withCwd(
+      'test/fixtures/tailwind-project',
+      async () => await resolveRule('Component.vue', 'tailwindcss/classnames-order'),
+    )
+
+    expect(severity).toBeDefined()
+    expect(severity![0]).not.toBe('off')
   })
 })

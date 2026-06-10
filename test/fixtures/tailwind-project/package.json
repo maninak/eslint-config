@@ -1,0 +1,9 @@
+{
+  "name": "tailwind-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "tailwindcss": "^3.4.0",
+    "vue": "^3.5.0"
+  }
+}

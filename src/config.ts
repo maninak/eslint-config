@@ -14,10 +14,11 @@ import {
   GLOB_TSX,
   GLOB_VUE,
 } from '@antfu/eslint-config'
-import { FlatCompat } from '@eslint/eslintrc'
 import pluginStylistic from '@stylistic/eslint-plugin'
 import pluginJasmine from 'eslint-plugin-jasmine'
 import pluginPrettier from 'eslint-plugin-prettier'
+import pluginPrettierVue from 'eslint-plugin-prettier-vue'
+import pluginTailwindcss from 'eslint-plugin-tailwindcss'
 import pluginVueScopedCss from 'eslint-plugin-vue-scoped-css'
 import { getConsumerVueVersion, isInConsumerDeps } from './utils.js'
 
@@ -486,7 +487,7 @@ export default function buildConfig() {
     {
       /*
        * Rules for plain JavaScript files
-       * ========================================================================================
+       * ======================================================================================
        */
       files: [GLOB_JS, GLOB_JSX],
       rules: {
@@ -533,6 +534,10 @@ export default function buildConfig() {
         'max-len': 'off',
       },
     },
+    /*
+     * Rules for Vue single-file components
+     * ========================================================================================
+     */
     ...(isInConsumerDeps('vue')
       ? ([
           ...(pluginVueScopedCss.configs.recommended as TypedFlatConfigItem[]),
@@ -549,173 +554,148 @@ export default function buildConfig() {
           },
         ] satisfies TypedFlatConfigItem[])
       : []),
-    // FlatCompat below is used exclusively for plugins that do not yet support ESLint flat config:
-    // eslint-plugin-prettier-vue and eslint-plugin-tailwindcss.
-    // TODO: Migrate each block to native flat config once the underlying plugin publishes flat support.
-    /* eslint-disable ts/no-explicit-any -- FlatCompat is loose-typed; tightening would require manual schemas. */
-    ...(new FlatCompat().config({
-      root: true,
-      overrides: [
-        ...((isInConsumerDeps('vue')
-          ? [
-              {
-                /*
-                 * Rules for Vue single-file components
-                 * ============================================================================
-                 */
-                files: [GLOB_VUE],
-                extends: ['plugin:prettier-vue/recommended'],
-                parser: 'vue-eslint-parser',
-                parserOptions: { parser: '@typescript-eslint/parser' },
-                rules: {
-                  '@typescript-eslint/explicit-member-accessibility': 'off',
-
-                  'vue/html-self-closing': [
-                    'warn',
-                    {
-                      html: { void: 'always', normal: 'never', component: 'always' },
-                      svg: 'always',
-                      math: 'always',
-                    },
-                  ],
-
-                  'prettier-vue/prettier': ['warn', prettierConfig],
-
-                  // overrides to antfu's defaults
-                  'vue/max-attributes-per-line': ['warn', { singleline: 5 }],
-                  'vue/no-v-html': 'error',
-                  'vue/require-prop-types': 'warn',
-                  'vue/require-default-prop': 'warn',
-                  'vue/multi-word-component-names': 'warn',
-                  'vue/prefer-import-from-vue': 'warn',
-                  'vue/no-v-text-v-html-on-component': 'warn',
-                  'vue/no-setup-props-reactivity-loss': 'warn',
-                  'vue/block-order': ['warn', { order: ['script', 'template', 'style'] }],
-                  'vue/block-tag-newline': [
-                    'warn',
-                    { singleline: 'always', multiline: 'always' },
-                  ],
-                  'vue/component-name-in-template-casing': ['warn', 'PascalCase'],
-                  'vue/component-options-name-casing': ['warn', 'PascalCase'],
-                  'vue/custom-event-name-casing': ['warn', 'camelCase'],
-                  'vue/define-macros-order': [
-                    'warn',
-                    { order: ['defineProps', 'defineEmits'] },
-                  ],
-                  'vue/html-comment-content-spacing': [
-                    'warn',
-                    'always',
-                    { exceptions: ['-'] },
-                  ],
-                  'vue/no-restricted-v-bind': ['warn', '/^v-/'],
-                  'vue/no-useless-v-bind': 'warn',
-                  'vue/no-unused-refs': 'warn',
-                  'vue/prefer-separate-static-class': 'warn',
-
-                  /*
-                   * Version-agnostic Vue rules
-                   * Apply on any Vue major; useful for both Options API and Composition API.
-                   * --------------------------------------------------------------------------
-                   */
-                  'vue/no-unused-properties': [
-                    'warn',
-                    {
-                      deepData: true,
-                      groups: ['props', 'data', 'computed', 'methods', 'setup'],
-                    },
-                  ],
-                  'vue/no-undef-components': 'warn',
-                  'vue/no-undef-properties': 'warn',
-                  'vue/max-template-depth': ['warn', { maxDepth: 8 }],
-                  'vue/no-required-prop-with-default': ['warn', { autofix: false }],
-                  'vue/html-button-has-type': [
-                    'warn',
-                    { button: true, submit: true, reset: true },
-                  ],
-
-                  /*
-                   * Vue 3+ rules
-                   * Type-based macros and the composition API. Auto-detected from the consumer's
-                   * `vue` (or `nuxt`) dep range; manually override the rule level in your own
-                   * `eslint.config.mjs` for a Vue 2 codebase if needed.
-                   * --------------------------------------------------------------------------
-                   */
-                  ...(resolvedVueVersion >= 3
-                    ? {
-                        'vue/define-props-declaration': ['warn', 'type-based'],
-                        'vue/define-emits-declaration': ['warn', 'type-based'],
-                        'vue/no-unused-emit-declarations': 'warn',
-                        'vue/component-api-style': ['warn', ['script-setup']],
-                        'vue/prefer-define-options': 'warn',
-                        'vue/require-typed-ref': 'warn',
-                      }
-                    : {}),
-
-                  /*
-                   * Vue 3.5+ rules
-                   * Rules that require APIs introduced in Vue 3.5 (e.g. `useTemplateRef`).
-                   * --------------------------------------------------------------------------
-                   */
-                  ...(resolvedVueVersion >= 3.5
-                    ? { 'vue/prefer-use-template-ref': 'warn' }
-                    : {}),
-
-                  'vue/array-bracket-spacing': ['warn', 'never'],
-                  'vue/arrow-spacing': ['warn', { before: true, after: true }],
-                  'vue/block-spacing': ['warn', 'always'],
-                  'vue/brace-style': ['warn', 'stroustrup', { allowSingleLine: true }],
-                  'vue/comma-dangle': ['warn', 'always-multiline'],
-                  'vue/comma-spacing': ['warn', { before: false, after: true }],
-                  'vue/comma-style': ['warn', 'last'],
-                  'vue/dot-location': ['warn', 'property'],
-                  'vue/dot-notation': ['warn', { allowKeywords: true }],
-                  'vue/eqeqeq': ['warn', 'smart'],
-                  'vue/key-spacing': ['warn', { beforeColon: false, afterColon: true }],
-                  'vue/keyword-spacing': ['warn', { before: true, after: true }],
-                  'vue/no-empty-pattern': 'warn',
-                  'vue/no-extra-parens': ['warn', 'functions'],
-                  'vue/no-irregular-whitespace': 'warn',
-                  'vue/object-curly-newline': ['warn', { multiline: true, consistent: true }],
-                  'vue/object-curly-spacing': ['warn', 'always'],
-                  'vue/object-property-newline': [
-                    'warn',
-                    { allowAllPropertiesOnSameLine: true },
-                  ],
-                  'vue/object-shorthand': [
-                    'warn',
-                    'always',
-                    { ignoreConstructors: false, avoidQuotes: true },
-                  ],
-                  'vue/operator-linebreak': ['warn', 'before'],
-                  'vue/prefer-template': 'warn',
-                  'vue/quote-props': ['warn', 'consistent-as-needed'],
-                  'vue/space-in-parens': ['warn', 'never'],
-                  'vue/space-infix-ops': 'warn',
-                  'vue/space-unary-ops': ['warn', { words: true, nonwords: false }],
-                  'vue/template-curly-spacing': 'warn',
+    ...(isInConsumerDeps('vue')
+      ? ([
+          {
+            name: 'maninak/prettier-vue',
+            files: [GLOB_VUE],
+            plugins: { 'prettier-vue': interopDefault(pluginPrettierVue) },
+            rules: {
+              ...prettierRulesFixingConflictsWithEslint,
+              'prettier-vue/prettier': ['warn', prettierConfig],
+            },
+          },
+          {
+            name: 'maninak/vue/rules',
+            files: [GLOB_VUE],
+            rules: {
+              // overrides to antfu's defaults
+              'vue/html-self-closing': [
+                'warn',
+                {
+                  html: { void: 'always', normal: 'never', component: 'always' },
+                  svg: 'always',
+                  math: 'always',
                 },
-              },
-            ]
-          : []) as any[]),
-        ...((isInConsumerDeps('tailwindcss')
-          ? [
-              {
-                /*
-                 * Rules for front-end component files (Vue, JSX, TSX)
-                 * ============================================================================
-                 */
-                files: [GLOB_VUE, GLOB_JSX, GLOB_TSX],
-                extends: ['plugin:tailwindcss/recommended'],
-                plugins: ['tailwindcss'],
-                rules: {
-                  'tailwindcss/no-custom-classname': 'off',
+              ],
+              'vue/max-attributes-per-line': ['warn', { singleline: 5 }],
+              'vue/no-v-html': 'error',
+              'vue/require-prop-types': 'warn',
+              'vue/require-default-prop': 'warn',
+              'vue/multi-word-component-names': 'warn',
+              'vue/prefer-import-from-vue': 'warn',
+              'vue/no-v-text-v-html-on-component': 'warn',
+              'vue/no-setup-props-reactivity-loss': 'warn',
+              'vue/block-order': ['warn', { order: ['script', 'template', 'style'] }],
+              'vue/block-tag-newline': ['warn', { singleline: 'always', multiline: 'always' }],
+              'vue/component-name-in-template-casing': ['warn', 'PascalCase'],
+              'vue/component-options-name-casing': ['warn', 'PascalCase'],
+              'vue/custom-event-name-casing': ['warn', 'camelCase'],
+              'vue/define-macros-order': ['warn', { order: ['defineProps', 'defineEmits'] }],
+              'vue/html-comment-content-spacing': ['warn', 'always', { exceptions: ['-'] }],
+              'vue/no-restricted-v-bind': ['warn', '/^v-/'],
+              'vue/no-useless-v-bind': 'warn',
+              'vue/no-unused-refs': 'warn',
+              'vue/prefer-separate-static-class': 'warn',
+
+              /*
+               * Version-agnostic Vue rules
+               * Apply on any Vue major; useful for both Options API and Composition API.
+               * --------------------------------------------------------------------------
+               */
+              'vue/no-unused-properties': [
+                'warn',
+                {
+                  deepData: true,
+                  groups: ['props', 'data', 'computed', 'methods', 'setup'],
                 },
-              },
-            ]
-          : []) as any[]),
-      ] as any[],
-    }) as TypedFlatConfigItem[]),
-    /* eslint-enable ts/no-explicit-any */
+              ],
+              'vue/no-undef-components': 'warn',
+              'vue/no-undef-properties': 'warn',
+              'vue/max-template-depth': ['warn', { maxDepth: 8 }],
+              'vue/no-required-prop-with-default': ['warn', { autofix: false }],
+              'vue/html-button-has-type': [
+                'warn',
+                { button: true, submit: true, reset: true },
+              ],
+
+              /*
+               * Vue 3+ rules
+               * Type-based macros and the composition API. Auto-detected from the consumer's
+               * `vue` (or `nuxt`) dep range; manually override the rule level in your own
+               * `eslint.config.mjs` for a Vue 2 codebase if needed.
+               * --------------------------------------------------------------------------
+               */
+              ...(resolvedVueVersion >= 3
+                ? {
+                    'vue/define-props-declaration': ['warn', 'type-based'],
+                    'vue/define-emits-declaration': ['warn', 'type-based'],
+                    'vue/no-unused-emit-declarations': 'warn',
+                    'vue/component-api-style': ['warn', ['script-setup']],
+                    'vue/prefer-define-options': 'warn',
+                    'vue/require-typed-ref': 'warn',
+                  }
+                : {}),
+
+              /*
+               * Vue 3.5+ rules
+               * Rules that require APIs introduced in Vue 3.5 (e.g. `useTemplateRef`).
+               * --------------------------------------------------------------------------
+               */
+              ...(resolvedVueVersion >= 3.5 ? { 'vue/prefer-use-template-ref': 'warn' } : {}),
+
+              'vue/array-bracket-spacing': ['warn', 'never'],
+              'vue/arrow-spacing': ['warn', { before: true, after: true }],
+              'vue/block-spacing': ['warn', 'always'],
+              'vue/brace-style': ['warn', 'stroustrup', { allowSingleLine: true }],
+              'vue/comma-dangle': ['warn', 'always-multiline'],
+              'vue/comma-spacing': ['warn', { before: false, after: true }],
+              'vue/comma-style': ['warn', 'last'],
+              'vue/dot-location': ['warn', 'property'],
+              'vue/dot-notation': ['warn', { allowKeywords: true }],
+              'vue/eqeqeq': ['warn', 'smart'],
+              'vue/key-spacing': ['warn', { beforeColon: false, afterColon: true }],
+              'vue/keyword-spacing': ['warn', { before: true, after: true }],
+              'vue/no-empty-pattern': 'warn',
+              'vue/no-extra-parens': ['warn', 'functions'],
+              'vue/no-irregular-whitespace': 'warn',
+              'vue/object-curly-newline': ['warn', { multiline: true, consistent: true }],
+              'vue/object-curly-spacing': ['warn', 'always'],
+              'vue/object-property-newline': ['warn', { allowAllPropertiesOnSameLine: true }],
+              'vue/object-shorthand': [
+                'warn',
+                'always',
+                { ignoreConstructors: false, avoidQuotes: true },
+              ],
+              'vue/operator-linebreak': ['warn', 'before'],
+              'vue/prefer-template': 'warn',
+              'vue/quote-props': ['warn', 'consistent-as-needed'],
+              'vue/space-in-parens': ['warn', 'never'],
+              'vue/space-infix-ops': 'warn',
+              'vue/space-unary-ops': ['warn', { words: true, nonwords: false }],
+              'vue/template-curly-spacing': 'warn',
+            },
+          },
+        ] satisfies TypedFlatConfigItem[])
+      : []),
+    ...(isInConsumerDeps('tailwindcss')
+      ? ([
+          /*
+           * Rules for front-end component files (Vue, JSX, TSX)
+           * ==================================================================================
+           */
+          ...(interopDefault(pluginTailwindcss).configs[
+            'flat/recommended'
+          ] as TypedFlatConfigItem[]),
+          {
+            name: 'maninak/tailwindcss/overrides',
+            files: [GLOB_VUE, GLOB_JSX, GLOB_TSX],
+            rules: {
+              'tailwindcss/no-custom-classname': 'off',
+            },
+          },
+        ] satisfies TypedFlatConfigItem[])
+      : []),
   ] satisfies [Parameters<typeof antfu>['0'], ...TypedFlatConfigItem[]]
 }
 

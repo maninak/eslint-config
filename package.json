@@ -39,9 +39,10 @@
     "postbuild": "tsc -p tsconfig.build.json --emitDeclarationOnly && cp ./dist/index.d.ts ./dist/index.d.cts",
     "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-location node_modules/.cache/eslint",
     "test": "npm run test:unit && npm run test:typings",
-    "test:unit": "vitest run",
     "test:typings": "tsc -p tsconfig.typecheck.json --noEmit",
-    "preversion": "npm run verify-deps && npm run lint && npm run test && npm run build && publint",
+    "test:unit": "vitest run",
+    "test:build-artifact": "vitest run test/build-artifact.test.ts",
+    "preversion": "npm run verify-deps && npm run lint && npm run test && npm run build && npm run test:build-artifact && publint",
     "prepublishOnly": "npm run build && publint",
     "postpublish": "git push --tags"
   },
@@ -56,7 +57,6 @@
   },
   "dependencies": {
     "@antfu/eslint-config": "^9.0.0",
-    "@eslint/eslintrc": "^3.3.0",
     "@nuxt/eslint-config": "^1.15.2",
     "@stylistic/eslint-plugin": "^5.0.0",
     "eslint-config-prettier": "^10.1.0",
@@ -74,8 +74,7 @@
     "eslint-define-config": "link:@@antfu/eslint-define-config",
     "publint": "^0.3.0",
     "tsup": "^8.0.0",
-    "vitest": "^4.1.8",
-    "vue-eslint-parser": "^10.4.1"
+    "vitest": "^4.1.8"
   },
   "simple-git-hooks": {
     "pre-commit": "npx lint-staged"
