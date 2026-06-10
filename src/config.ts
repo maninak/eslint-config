@@ -534,7 +534,20 @@ export default function buildConfig() {
       },
     },
     ...(isInConsumerDeps('vue')
-      ? (pluginVueScopedCss.configs.recommended as TypedFlatConfigItem[])
+      ? ([
+          ...(pluginVueScopedCss.configs.recommended as TypedFlatConfigItem[]),
+          {
+            name: 'maninak/vue-scoped-css/overrides',
+            files: [GLOB_VUE],
+            rules: {
+              'vue-scoped-css/no-deprecated-v-enter-v-leave-class': 'error',
+              'vue-scoped-css/require-selector-used-inside': 'warn',
+              'vue-scoped-css/v-deep-pseudo-style': 'error',
+              'vue-scoped-css/v-global-pseudo-style': 'error',
+              'vue-scoped-css/v-slotted-pseudo-style': 'error',
+            },
+          },
+        ] satisfies TypedFlatConfigItem[])
       : []),
     // FlatCompat below is used exclusively for plugins that do not yet support ESLint flat config:
     // eslint-plugin-prettier-vue and eslint-plugin-tailwindcss.
@@ -556,12 +569,6 @@ export default function buildConfig() {
                 parserOptions: { parser: '@typescript-eslint/parser' },
                 rules: {
                   '@typescript-eslint/explicit-member-accessibility': 'off',
-
-                  'vue-scoped-css/no-deprecated-v-enter-v-leave-class': 'error',
-                  'vue-scoped-css/require-selector-used-inside': 'warn',
-                  'vue-scoped-css/v-deep-pseudo-style': 'error',
-                  'vue-scoped-css/v-global-pseudo-style': 'error',
-                  'vue-scoped-css/v-slotted-pseudo-style': 'error',
 
                   'vue/html-self-closing': [
                     'warn',
