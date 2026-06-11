@@ -262,6 +262,8 @@ export default function buildConfig() {
           { blankLine: 'any', prev: 'singleline-const', next: 'for' },
           { blankLine: 'any', prev: 'singleline-const', next: 'while' },
           { blankLine: 'any', prev: 'singleline-const', next: 'do' },
+          // relax for co-located declarations immediately before their associated function
+          { blankLine: 'any', prev: ['singleline-const', 'singleline-let'], next: 'function' },
         ],
         'id-length': ['warn', { min: 2, max: 50, exceptions: ['i', 'j', 'x', 'y', 'z', '_'] }],
         'max-len': [
