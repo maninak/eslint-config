@@ -66,13 +66,11 @@ TypeScript 6 added TS5011 (explicit `rootDir` required when `outDir` is set and 
 
 `@stylistic/eslint-plugin` is registered manually in `src/config.ts` because antfu with `stylistic: false` does not register the plugin itself. The `style/...` rule prefix we use is the rename antfu defines. If antfu's rename map changes, the prefix must change.
 
-The FlatCompat block at the end of `src/config.ts` exists for plugins that have not yet shipped flat-config support: `eslint-plugin-vue-scoped-css`, `eslint-plugin-prettier-vue`, `eslint-plugin-tailwindcss`. When any of these ship native flat config, port that block off FlatCompat. The cast to `TypedFlatConfigItem[]` is there because FlatCompat returns the `@types/eslint` config shape, structurally compatible but nominally distinct from antfu's type.
-
 ## Release process
 
 ```bash
 # bump version in package.json (or npm version <patch|minor|major>)
-npm version <patch|minor|major>   # runs preversion: build + test
+npm version <patch|minor|major>    # runs preversion: build + test
 pnpm publish                       # runs prepublish: verify-deps + lint, then publishes
                                    # postpublish pushes the version tag
 ```
@@ -81,4 +79,4 @@ Before publishing a new major or significant minor, install the tarball in `cyte
 
 ## Supporting the project
 
-Beyond code, a sustaining way to contribute is [sponsoring on Liberapay](https://liberapay.com/maninak/donate). Recurring micro-donations help keep this and the surrounding Radicle tooling actively maintained.
+Beyond code, a sustaining way to contribute is [sponsoring on Liberapay](https://liberapay.com/maninak/donate). Recurring micro-donations help keep this other projects actively maintained.
