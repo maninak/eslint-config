@@ -41,7 +41,7 @@ const prettierConfig: PrettierConfig = {
   trailingComma: 'all',
   quoteProps: 'consistent',
   arrowParens: 'always',
-  htmlWhitespaceSensitivity: 'ignore',
+  htmlWhitespaceSensitivity: 'css',
 }
 
 /**
