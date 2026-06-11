@@ -306,6 +306,24 @@ export default maninak(
 )
 ```
 
+### Silencing a rule
+
+It might be the case that a rule is firing but you know better and would prefer it silenced. Here's how to silence a rule inline:
+
+```ts
+const unused1 = unusedVar // eslint-disable-line unused-imports/no-unused-vars
+
+// eslint-disable-next-line unused-imports/no-unused-vars
+const unused2 = unusedVar
+
+/* eslint-disable unused-imports/no-unused-vars */
+const unused3 = unusedVar
+const unused4 = unusedVar
+/* eslint-enable unused-imports/no-unused-vars */
+```
+
+To silence a rule across the entire file, put the `eslint-disable` at the top with no matching `eslint-enable`. To silence across the whole repo, turn it off in `eslint.config.mjs` (see the flat config examples above).
+
 ## Support
 
 If this config saves you time, consider [sponsoring on Liberapay](https://liberapay.com/maninak/donate). Recurring micro-donations help me keep maintaining it (and all my other tools) in the open.
