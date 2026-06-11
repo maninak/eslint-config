@@ -276,6 +276,7 @@ export default function buildConfig() {
             ignoreTemplateLiterals: true, // TODO: remove once prettier resolves https://github.com/prettier/prettier/issues/3368
             ignoreRegExpLiterals: true,
             ignoreUrls: true,
+            ignorePattern: '^\\s*:?(?:class|style)=".+"',
           },
         ],
         // convention violation (import lodash properly), not a dangerous error, so warn
