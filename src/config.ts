@@ -60,7 +60,7 @@ export default function buildConfig() {
 
   return [
     {
-      ignores: ['static', '.*', '!.*.*', 'LICENCE'],
+      ignores: ['static', '.*', '!.*.*', 'LICENCE', 'pnpm-workspace.yaml'],
       stylistic: false,
       typescript: {
         // Rules that do NOT require type information (applied to all TS files,
