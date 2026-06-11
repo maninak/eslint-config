@@ -57,10 +57,10 @@ describe('non-type-aware rules fire on real code', () => {
 })
 
 describe('type-aware rules fire when tsconfigPath is set', () => {
-  it('ts/strict-boolean-expressions flags `if (any)` (allowAny: false)', async () => {
+  it('ts/strict-boolean-expressions is disabled (too noisy on union types)', async () => {
     const msgs = await lintFixture(typeAwareFixture, tsOptions)
 
-    expect(msgs).toContainEqual(
+    expect(msgs).not.toContainEqual(
       expect.objectContaining({ ruleId: 'ts/strict-boolean-expressions' }),
     )
   })

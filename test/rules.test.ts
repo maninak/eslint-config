@@ -41,21 +41,10 @@ describe('type-aware overrides apply when tsconfigPath is set', () => {
     expect(rule?.[0]).toBe('off')
   })
 
-  it('ts/strict-boolean-expressions allows all Nullable variants', async () => {
+  it('ts/strict-boolean-expressions is disabled', async () => {
     const rule = await resolveRule(tsFixture, 'ts/strict-boolean-expressions', tsOptions)
 
-    expect(rule).toMatchObject([
-      'warn',
-      {
-        allowString: true,
-        allowNumber: true,
-        allowNullableBoolean: true,
-        allowNullableString: true,
-        allowNullableNumber: true,
-        allowNullableObject: true,
-        allowAny: false,
-      },
-    ])
+    expect(rule).toEqual(['off'])
   })
 
   it('ts/return-await is enabled', async () => {

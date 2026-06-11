@@ -173,22 +173,14 @@ export default function buildConfig() {
           // about async/await).
           'ts/return-await': ['warn', 'always'],
 
-          // antfu default: ['error', { ... }]. The rule catches real bugs but rejects
-          // idiomatic `if (str)` for nullable strings/numbers/booleans, which dominates
-          // a typical codebase. Relax those variants and downgrade to warn.
-          'ts/strict-boolean-expressions': [
-            'warn',
-            {
-              allowString: true,
-              allowNumber: true,
-              allowNullableBoolean: true,
-              allowNullableString: true,
-              allowNullableNumber: true,
-              allowNullableObject: true,
-              // Keep `if (any)` flagged: an any-typed condition really is a hole worth seeing.
-              allowAny: false,
-            },
-          ],
+          // Disabled: the rule's `allow*` options don't compose over union types, so a
+          // legitimately-written `if (!errorCode)` where
+          // `errorCode: string | number | undefined` still fires even with allowNullableString
+          // + allowNullableNumber options set.This creates noise without safety benefit, since
+          // `ts/no-unnecessary-condition` catches the genuinely problematic cases
+          // (always-true/always-false), while `ts/no-unsafe-member-access`
+          // and friends catch `any`-typed conditions.
+          'ts/strict-boolean-expressions': 'off',
 
           // Type-aware additions not in antfu's defaults (all fixable, so warn).
           'ts/require-array-sort-compare': 'warn',
@@ -579,16 +571,27 @@ export default function buildConfig() {
                   math: 'always',
                 },
               ],
-              'vue/max-attributes-per-line': ['warn', { singleline: 5 }],
               'vue/no-v-html': 'error',
               'vue/require-prop-types': 'warn',
               'vue/require-default-prop': 'warn',
+              // The following rules are in eslint-config-prettier's Vue section (all `off`)
+              // but antfu's vue() config re-enables several of them because they don't use
+              // prettier. We disable explicitly so prettier-vue handles all Vue template
+              // formatting without circular fix conflicts.
+              'vue/html-indent': 'off',
+              'vue/html-closing-bracket-newline': 'off',
+              'vue/multiline-html-element-content-newline': 'off',
+              'vue/singleline-html-element-content-newline': 'off',
+              'vue/max-attributes-per-line': 'off',
+              'vue/block-tag-newline': 'off',
+              'vue/operator-linebreak': 'off',
+              'vue/quote-props': 'off',
+
               'vue/multi-word-component-names': 'warn',
               'vue/prefer-import-from-vue': 'warn',
               'vue/no-v-text-v-html-on-component': 'warn',
               'vue/no-setup-props-reactivity-loss': 'warn',
               'vue/block-order': ['warn', { order: ['script', 'template', 'style'] }],
-              'vue/block-tag-newline': ['warn', { singleline: 'always', multiline: 'always' }],
               'vue/component-name-in-template-casing': ['warn', 'PascalCase'],
               'vue/component-options-name-casing': ['warn', 'PascalCase'],
               'vue/custom-event-name-casing': ['warn', 'camelCase'],
@@ -645,36 +648,17 @@ export default function buildConfig() {
                */
               ...(resolvedVueVersion >= 3.5 ? { 'vue/prefer-use-template-ref': 'warn' } : {}),
 
-              'vue/array-bracket-spacing': ['warn', 'never'],
-              'vue/arrow-spacing': ['warn', { before: true, after: true }],
-              'vue/block-spacing': ['warn', 'always'],
-              'vue/brace-style': ['warn', 'stroustrup', { allowSingleLine: true }],
-              'vue/comma-dangle': ['warn', 'always-multiline'],
-              'vue/comma-spacing': ['warn', { before: false, after: true }],
-              'vue/comma-style': ['warn', 'last'],
-              'vue/dot-location': ['warn', 'property'],
+              // Vue equivalents of native JS logic rules
               'vue/dot-notation': ['warn', { allowKeywords: true }],
               'vue/eqeqeq': ['warn', 'smart'],
-              'vue/key-spacing': ['warn', { beforeColon: false, afterColon: true }],
-              'vue/keyword-spacing': ['warn', { before: true, after: true }],
               'vue/no-empty-pattern': 'warn',
-              'vue/no-extra-parens': ['warn', 'functions'],
               'vue/no-irregular-whitespace': 'warn',
-              'vue/object-curly-newline': ['warn', { multiline: true, consistent: true }],
-              'vue/object-curly-spacing': ['warn', 'always'],
-              'vue/object-property-newline': ['warn', { allowAllPropertiesOnSameLine: true }],
               'vue/object-shorthand': [
                 'warn',
                 'always',
                 { ignoreConstructors: false, avoidQuotes: true },
               ],
-              'vue/operator-linebreak': ['warn', 'before'],
               'vue/prefer-template': 'warn',
-              'vue/quote-props': ['warn', 'consistent-as-needed'],
-              'vue/space-in-parens': ['warn', 'never'],
-              'vue/space-infix-ops': 'warn',
-              'vue/space-unary-ops': ['warn', { words: true, nonwords: false }],
-              'vue/template-curly-spacing': 'warn',
             },
           },
         ] satisfies TypedFlatConfigItem[])
