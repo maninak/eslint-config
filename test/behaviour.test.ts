@@ -399,6 +399,24 @@ describe('padding-line-between-statements', async () => {
   })
 })
 
+describe('JSX attribute quote style)', () => {
+  async function lintJsx(file: string): Promise<Awaited<ReturnType<typeof lint>>> {
+    return await callAtDir('test/fixtures/jsx-project', async () => await lint(file))
+  }
+
+  it('flags single-quoted JSX attributes', async () => {
+    const result = await lintJsx('single-quotes.tsx')
+
+    expect(result).toContainEqual(expect.objectContaining({ ruleId: 'prettier/prettier' }))
+  })
+
+  it('accepts double-quoted JSX attributes', async () => {
+    const result = await lintJsx('double-quotes.tsx')
+
+    expect(result).toEqual([])
+  })
+})
+
 describe('prettier-vue rules fire on .vue files', () => {
   it('prettier-vue/prettier flags formatting issues', async () => {
     const result = await callAtDir(
@@ -421,5 +439,22 @@ describe('tailwindcss rules are registered on .vue files when tailwindcss is a d
 
     expect(severity).toBeDefined()
     expect(severity![0]).not.toBe('off')
+  })
+})
+
+describe('TOML files lint without prettier parse failures', () => {
+  /*
+   * Before excluding TOML from the prettier block, prettier had no parser for it and fell
+   * back to a JS parse: section headers parsed as array literals and hyphenated bare keys
+   * (`default-features = false`) errored as invalid assignments, so every Cargo.toml failed.
+   */
+  it('a Cargo-style manifest with hyphenated keys produces no parsing errors', async () => {
+    const results = await lint('test/fixtures/manifest.toml')
+
+    const parseFailures = results.filter((result) => result.message.includes('Parsing error'))
+    const prettierFindings = results.filter((result) => result.ruleId === 'prettier/prettier')
+
+    expect(parseFailures).toEqual([])
+    expect(prettierFindings).toEqual([])
   })
 })

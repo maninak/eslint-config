@@ -60,14 +60,6 @@ describe('type-aware overrides apply when tsconfigPath is set', () => {
   })
 })
 
-describe('stylistic plugin is registered manually under style/ prefix', () => {
-  it('jsx-quotes is configured', async () => {
-    const rule = await resolveRule(tsFixture, 'jsx-quotes')
-
-    expect(rule).toEqual(['warn', 'prefer-double'])
-  })
-})
-
 describe('vue rules apply on .vue files only (when consumer has vue declared)', () => {
   it('vue/define-props-declaration is warn for .vue', async () => {
     await callAtDir('test/fixtures/vue-project', async () => {
@@ -97,5 +89,48 @@ describe('vue rules apply on .vue files only (when consumer has vue declared)', 
 
       expect(rule).toMatchObject(['warn', { maxDepth: 8 }])
     })
+  })
+})
+
+describe('eslint-config-prettier conflict disables actually apply', () => {
+  /*
+   * Regression guard for the `interopDefault(import('eslint-config-prettier'))` bug: a
+   * Promise was passed to the sync interop helper, so the conflict-disable spread silently
+   * contributed nothing. These assert representative disables from that set are in effect.
+   */
+  it('unicorn/number-literal-case is off (prettier lowercases hex, the rule uppercases)', async () => {
+    const rule = await resolveRule(tsFixture, 'unicorn/number-literal-case')
+
+    expect(rule?.[0]).toBe('off')
+  })
+
+  it('@stylistic/quotes (style/quotes) carries no formatting conflict at error severity', async () => {
+    const rule = await resolveRule(tsFixture, 'style/quotes')
+
+    expect(rule?.[0]).not.toBe('error')
+  })
+
+  it('vue/html-self-closing survives the disable list (deliberately deleted from it)', async () => {
+    await callAtDir('test/fixtures/vue-project', async () => {
+      const rule = await resolveRule('Component.vue', 'vue/html-self-closing')
+
+      expect(rule?.[0]).toBe('warn')
+    })
+  })
+})
+
+describe('rules that fight prettier fixes are off', () => {
+  it('antfu/consistent-chaining is off (circular fixes against prettier chain layout)', async () => {
+    const rule = await resolveRule(tsFixture, 'antfu/consistent-chaining')
+
+    expect(rule).toEqual(['off'])
+  })
+})
+
+describe('prettier does not run on TOML', () => {
+  it('prettier/prettier has no entry for .toml files', async () => {
+    const rule = await resolveRule('test/fixtures/manifest.toml', 'prettier/prettier')
+
+    expect(rule?.[0] ?? 'off').toBe('off')
   })
 })

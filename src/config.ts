@@ -12,10 +12,12 @@ import {
   GLOB_JSX,
   GLOB_SVELTE,
   GLOB_TESTS,
+  GLOB_TOML,
   GLOB_TSX,
   GLOB_VUE,
 } from '@antfu/eslint-config'
 import pluginStylistic from '@stylistic/eslint-plugin'
+import configPrettier from 'eslint-config-prettier'
 import pluginJasmine from 'eslint-plugin-jasmine'
 import pluginPrettier from 'eslint-plugin-prettier'
 import pluginPrettierVue from 'eslint-plugin-prettier-vue'
@@ -26,7 +28,7 @@ import { getConsumerVueVersion, isInConsumerDeps } from './utils.js'
 const prettier = interopDefault(pluginPrettier)
 
 const prettierRulesFixingConflictsWithEslint = {
-  ...interopDefault(import('eslint-config-prettier')).rules,
+  ...interopDefault(configPrettier).rules,
 }
 delete prettierRulesFixingConflictsWithEslint['vue/html-self-closing']
 
@@ -67,8 +69,7 @@ export default function buildConfig() {
         // regardless of whether `tsconfigPath` is set by the consumer).
         overrides: {
           /*
-           * Rules implemented by `@typescript-eslint` follow, in antfu v9 definition order.
-           * Only rules that deviate from antfu's defaults are listed here.
+           * Rules implemented by `@typescript-eslint` (exposed as `ts/` in antfu) follow.
            * ==================================================================================
            */
 
@@ -92,20 +93,11 @@ export default function buildConfig() {
           'no-nested-ternary': 'warn',
           'complexity': ['warn', { max: 25 }],
 
-          // antfu default: off. Maninak warns on explicit `any` (not dangerous, just noisy).
-          'ts/no-explicit-any': 'warn',
-
-          // antfu default: off. Maninak treats this as a design smell, not urgent, so warn.
-          'ts/no-extraneous-class': 'warn',
-
-          // antfu default: off.
-          'ts/no-import-type-side-effects': 'warn',
-
-          // antfu default: off. Maninak treats redundant overloads as a design smell, so warn.
-          'ts/unified-signatures': 'warn',
-
-          // antfu default: off. Maninak turns off (managed by unused-imports plugin instead).
-          'ts/no-unused-vars': 'off',
+          'ts/no-explicit-any': 'warn', // antfu default: off.
+          'ts/no-extraneous-class': 'warn', // antfu default: off.
+          'ts/no-import-type-side-effects': 'warn', // antfu default: off.
+          'ts/unified-signatures': 'warn', // antfu default: off.
+          'ts/no-unused-vars': 'off', // antfu default: off. Managed by unused-imports plugin instead.
 
           /*
            * Rules below have no antfu default (maninak additions)
@@ -113,17 +105,11 @@ export default function buildConfig() {
            */
 
           'ts/array-type': ['warn', { default: 'array', readonly: 'array' }],
-
           'ts/explicit-member-accessibility': 'warn',
-
-          'ts/prefer-for-of': 'warn', // style preference, not dangerous
-
+          'ts/prefer-for-of': 'warn',
           'ts/member-ordering': 'warn',
-
           'ts/no-inferrable-types': 'off',
-
           'ts/no-this-alias': 'off',
-
           'ts/naming-convention': [
             'warn',
             {
@@ -139,9 +125,7 @@ export default function buildConfig() {
             },
             { selector: 'typeLike', format: ['PascalCase'] },
           ],
-
           'ts/no-extra-non-null-assertion': 'warn',
-
           'ts/prefer-function-type': 'warn',
 
           // overrides to antfu's defaults
@@ -152,10 +136,6 @@ export default function buildConfig() {
           ],
         },
 
-        // Rules that REQUIRE type information. Antfu v9 places these in a separate config
-        // block (antfu/typescript/rules-type-aware) that only activates when the consumer
-        // passes `tsconfigPath`. The overrides here are merged into that block.
-        // Putting them in `overrides` above would have no effect.
         overridesTypeAware: {
           // antfu default: error. Off in maninak: fire-and-forget is a frequent legitimate
           // pattern in this codebase's domain (extension activation, UI side effects), and
@@ -194,8 +174,7 @@ export default function buildConfig() {
     {
       rules: {
         // antfu's pnpm plugin enforces shellEmulator: true and trustPolicy: "no-downgrade"
-        // via this rule. The trust-policy demand rejects legitimate dependency updates
-        // (eslint-config-prettier@9.1.2 was the trigger). Opt out globally.
+        // via this rule. The trust-policy demand rejects legitimate dependency updates.
         'pnpm/yaml-enforce-settings': 'off',
         // antfu enables this for jsonc files. Key order in tsconfig.json (and similar) is
         // conventional and not alphabetical, and the rule fights that convention.
@@ -209,7 +188,7 @@ export default function buildConfig() {
     },
     {
       plugins: {
-        // antfu v9 with `stylistic: false` does not register the @stylistic plugin, but
+        // antfu with `stylistic: false` does not register the @stylistic plugin, but
         // we still need it for `style/member-delimiter-style` further below.
         style: interopDefault(pluginStylistic),
       },
@@ -287,9 +266,8 @@ export default function buildConfig() {
             ignorePattern: '^\\s*:?(?:class|style)=".+"',
           },
         ],
-        // convention violation (import lodash properly), not a dangerous error, so warn
         'no-restricted-imports': [
-          'warn',
+          'error',
           {
             paths: [
               {
@@ -328,14 +306,8 @@ export default function buildConfig() {
         'no-undef-init': 'warn',
 
         /*
-         * Rules from `perfectionist` (exposed as `perfectionist/` in antfu v9) follow
+         * Rules from `perfectionist` follow
          * ====================================================================================
-         * Replaces the former `import/order` + native `sort-imports` combo:
-         *   - `perfectionist/sort-imports` = `import/order` (statement-level grouping & ordering)
-         *   - `perfectionist/sort-named-imports` = `sort-imports { ignoreDeclarationSort: true }`
-         *     (specifier-level sorting within a single import statement)
-         * `internalPattern` replicates the old `import/order` pathGroups for `@/` and `~/` aliases.
-         * All four rules are fixable, so warn.
          */
         'perfectionist/sort-imports': [
           'warn',
@@ -384,30 +356,23 @@ export default function buildConfig() {
         'antfu/if-newline': 'warn',
         'antfu/import-dedupe': 'warn',
         'antfu/top-level-function': 'warn',
-        'antfu/consistent-chaining': 'warn',
+        'antfu/consistent-chaining': 'off', // conflict with prettier
         'antfu/consistent-list-newline': ['warn', { CallExpression: false }], // conflict with prettier
         // antfu/curly is declared at the top of this rules block (near its sibling curly rule)
 
         /*
-         * Rules from `eslint-plugin-react` (jsx-quotes is a native ESLint rule, exposed here for clarity)
+         * Rules from `eslint-plugin-n` (exposed as `node/` in antfu) follow
          * ====================================================================================
          */
-        'jsx-quotes': ['warn', 'prefer-double'],
-
-        /*
-         * Rules from `eslint-plugin-n` (exposed as `node/` in antfu v9) follow
-         * ====================================================================================
-         */
-        // antfu v9 default: off . maninak enforces use of global process over importing it
+        // antfu default: off . maninak enforces use of global process over importing it
         'node/prefer-global/process': ['warn', 'always'],
 
         /*
-         * Rules from `@stylistic/eslint-plugin` (exposed as `style/` in antfu v9) follow.
+         * Rules from `@stylistic/eslint-plugin` (exposed as `style/` in antfu) follow.
          * Since maninak uses `stylistic: false`, antfu enables none of these by default.
          * ====================================================================================
          */
         // `ts/member-delimiter-style` was removed from @typescript-eslint v8 and moved here.
-        // Fixable, so warn.
         'style/member-delimiter-style': [
           'warn',
           {
@@ -423,7 +388,7 @@ export default function buildConfig() {
        * ======================================================================================
        */
       files: ['**/*'],
-      ignores: [GLOB_VUE, GLOB_SVELTE],
+      ignores: [GLOB_VUE, GLOB_SVELTE, GLOB_TOML],
       plugins: { prettier },
       rules: {
         ...prettierRulesFixingConflictsWithEslint,

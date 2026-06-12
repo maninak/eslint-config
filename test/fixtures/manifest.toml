@@ -1,0 +1,16 @@
+# A Cargo-style manifest exercising TOML constructs that a JS parse rejects:
+# hyphenated bare keys, section headers, inline tables, and arrays.
+
+[package]
+name = "fixture"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { version = "1.0", default-features = false }
+
+[profile.release]
+opt-level = "s"
+lto = true
