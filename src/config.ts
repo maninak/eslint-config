@@ -549,6 +549,7 @@ export default function buildConfig() {
             name: 'maninak/vue-scoped-css/overrides',
             files: [GLOB_VUE],
             rules: {
+              'vue-scoped-css/no-unused-selector': 'off', // alias of require-selector-used-inside
               'vue-scoped-css/no-deprecated-v-enter-v-leave-class': 'error',
               'vue-scoped-css/require-selector-used-inside': 'warn',
               'vue-scoped-css/v-deep-pseudo-style': 'error',
@@ -600,6 +601,7 @@ export default function buildConfig() {
 
               'vue/multi-word-component-names': 'warn',
               'vue/prefer-import-from-vue': 'warn',
+              'vue/no-dupe-keys': 'error',
               'vue/no-v-text-v-html-on-component': 'warn',
               'vue/no-setup-props-reactivity-loss': 'warn',
               'vue/block-order': ['warn', { order: ['script', 'template', 'style'] }],
