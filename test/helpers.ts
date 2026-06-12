@@ -60,7 +60,7 @@ export async function resolveRule(
   return [SEVERITY[num as 0 | 1 | 2], ...rest]
 }
 
-export interface FixtureMessage {
+export interface LintResult {
   ruleId: string | null
   severity: number
   line: number
@@ -68,15 +68,15 @@ export interface FixtureMessage {
 }
 
 /**
- * Lints a fixture file on disk under maninak(`options`) and returns the raw messages. Use this
+ * Lints a fixture file on disk under maninak(`options`) and returns the raw results. Use this
  * for behavioural tests: feed a fixture that contains a known violation, assert which rule
  * fires (or doesn't). Tests can also assert the absence of a rule to lock in that an
  * intentionally-disabled rule (e.g. `ts/no-floating-promises`) stays off.
  */
-export async function lintFixture(
+export async function lint(
   fixturePath: string,
   options: Parameters<typeof maninak>[0] = {},
-): Promise<FixtureMessage[]> {
+): Promise<LintResult[]> {
   const eslint = await getEslint(options)
   const results = await eslint.lintFiles([fixturePath])
 
@@ -91,17 +91,17 @@ export async function lintFixture(
 }
 
 /**
- * Temporarily chdirs to `fixtureDir` (resolved relative to the maninak repo root, not to the
- * caller) for the duration of `body`, then restores the previous cwd. Use this when a test
+ * Temporarily chdirs to `desiredCwd` (resolved relative to the maninak repo root, not to the
+ * caller) for the duration of `callee`, then restores the previous cwd. Use this when a test
  * needs maninak's framework auto-detection to see specific deps in `package.json` — for
  * example, Vue rules only load when the consumer's `package.json` declares `vue`.
  */
-export async function withCwd<T>(fixtureDir: string, body: () => Promise<T>): Promise<T> {
+export async function callAtDir<T>(desiredCwd: string, callee: () => Promise<T>): Promise<T> {
   const prev = process.cwd()
-  process.chdir(path.resolve(prev, fixtureDir))
+  process.chdir(path.resolve(prev, desiredCwd))
 
   try {
-    return await body()
+    return await callee()
   } finally {
     process.chdir(prev)
   }

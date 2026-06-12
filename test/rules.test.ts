@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveRule, withCwd } from './helpers.js'
+import { callAtDir, resolveRule } from './helpers.js'
 
 const tsFixture = 'test/fixtures/typescript.ts'
 const tsOptions = { typescript: { tsconfigPath: './tsconfig.json' } }
@@ -70,7 +70,7 @@ describe('stylistic plugin is registered manually under style/ prefix', () => {
 
 describe('vue rules apply on .vue files only (when consumer has vue declared)', () => {
   it('vue/define-props-declaration is warn for .vue', async () => {
-    await withCwd('test/fixtures/vue-project', async () => {
+    await callAtDir('test/fixtures/vue-project', async () => {
       const rule = await resolveRule('Component.vue', 'vue/define-props-declaration')
 
       expect(rule).toEqual(['warn', 'type-based'])
@@ -84,7 +84,7 @@ describe('vue rules apply on .vue files only (when consumer has vue declared)', 
   })
 
   it('vue/prefer-use-template-ref is warn for .vue (Vue 3.5+ API)', async () => {
-    await withCwd('test/fixtures/vue-project', async () => {
+    await callAtDir('test/fixtures/vue-project', async () => {
       const rule = await resolveRule('Component.vue', 'vue/prefer-use-template-ref')
 
       expect(rule?.[0]).toBe('warn')
@@ -92,7 +92,7 @@ describe('vue rules apply on .vue files only (when consumer has vue declared)', 
   })
 
   it('vue/max-template-depth is configured for .vue', async () => {
-    await withCwd('test/fixtures/vue-project', async () => {
+    await callAtDir('test/fixtures/vue-project', async () => {
       const rule = await resolveRule('Component.vue', 'vue/max-template-depth')
 
       expect(rule).toMatchObject(['warn', { maxDepth: 8 }])

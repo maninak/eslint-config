@@ -255,15 +255,23 @@ export default function buildConfig() {
           { blankLine: 'always', prev: '*', next: 'return' },
           { blankLine: 'always', prev: 'directive', next: '*' },
           { blankLine: 'always', prev: '*', next: 'multiline-block-like' },
-          // relax for co-located early return ifs
+          // Relax for co-located early return ifs
           { blankLine: 'any', prev: '*', next: 'if' },
-          // relax for co-located vars set by loops
+          // Relax for co-located vars set by loops
           { blankLine: 'any', prev: 'singleline-let', next: 'multiline-block-like' },
           { blankLine: 'any', prev: 'singleline-const', next: 'for' },
           { blankLine: 'any', prev: 'singleline-const', next: 'while' },
           { blankLine: 'any', prev: 'singleline-const', next: 'do' },
-          // relax for co-located declarations immediately before their associated function
-          { blankLine: 'any', prev: ['singleline-const', 'singleline-let'], next: 'function' },
+          // Relax for co-located declarations used in functions
+          // e.g. defining a let/const/type/interface that gets used in the following func
+          // We blanket allow (`prev: '*'`) because there's no dedicated STATEMENT_TYPE
+          // for type/interface declarations...
+          { blankLine: 'any', prev: '*', next: 'function' },
+          // ...so immediately we restore requiring blank line for common things
+          { blankLine: 'always', prev: 'class', next: 'function' },
+          { blankLine: 'always', prev: 'function', next: 'function' },
+          { blankLine: 'always', prev: 'expression', next: 'function' },
+          { blankLine: 'always', prev: 'multiline-expression', next: 'function' },
         ],
         'id-length': ['warn', { min: 2, max: 50, exceptions: ['i', 'j', 'x', 'y', 'z', '_'] }],
         'max-len': [
