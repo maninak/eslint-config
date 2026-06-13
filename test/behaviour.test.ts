@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { callAtDir, lint, resolveRule } from './helpers.js'
+import { callAtDir, lint, lintAndFix, resolveRule } from './helpers.js'
 
 const tsFixturePath = 'test/fixtures/typescript.ts'
 const typeAwareFixturePath = 'test/fixtures/type-aware.ts'
@@ -20,16 +20,20 @@ const tsOptions = { typescript: { tsconfigPath: 'test/fixtures/tsconfig.json' } 
  */
 
 describe('non-type-aware rules fire on real code', () => {
-  it('func-style flags a top-level arrow binding', async () => {
+  it('func-style flags a top-level arrow binding (at warn severity)', async () => {
     const results = await lint(tsFixturePath)
 
-    expect(results).toContainEqual(expect.objectContaining({ ruleId: 'func-style' }))
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'func-style', severity: 1 }),
+    )
   })
 
-  it('ts/no-explicit-any flags an explicit any', async () => {
+  it('ts/no-explicit-any flags an explicit any (at warn severity)', async () => {
     const results = await lint(tsFixturePath)
 
-    expect(results).toContainEqual(expect.objectContaining({ ruleId: 'ts/no-explicit-any' }))
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'ts/no-explicit-any', severity: 1 }),
+    )
   })
 
   it('no-debugger flags a debugger statement', async () => {
@@ -73,9 +77,9 @@ describe('type-aware rules fire when tsconfigPath is set', () => {
   })
 
   it('ts/promise-function-async flags a non-async Promise-returning function', async () => {
-    const result = await lint(typeAwareFixturePath, tsOptions)
+    const results = await lint(typeAwareFixturePath, tsOptions)
 
-    expect(result).toContainEqual(
+    expect(results).toContainEqual(
       expect.objectContaining({ ruleId: 'ts/promise-function-async' }),
     )
   })
@@ -83,12 +87,12 @@ describe('type-aware rules fire when tsconfigPath is set', () => {
 
 describe('type-aware rules auto-activate when tsconfig.json sits at cwd', () => {
   it('ts/promise-function-async fires without an explicit tsconfigPath', async () => {
-    const result = await callAtDir(
+    const results = await callAtDir(
       'test/fixtures/multi-ts',
       async () => await lint('src/source.ts'),
     )
 
-    expect(result).toContainEqual(
+    expect(results).toContainEqual(
       expect.objectContaining({ ruleId: 'ts/promise-function-async' }),
     )
   })
@@ -104,17 +108,17 @@ describe('tsconfigPath as an array unlocks non-standard tsconfig names', () => {
   }
 
   it('type-aware rules fire on files covered by the first tsconfig', async () => {
-    const result = await lintMultiTs('src/source.ts')
+    const results = await lintMultiTs('src/source.ts')
 
-    expect(result).toContainEqual(
+    expect(results).toContainEqual(
       expect.objectContaining({ ruleId: 'ts/promise-function-async' }),
     )
   })
 
   it('type-aware rules fire on files covered only by a non-standard tsconfig', async () => {
-    const result = await lintMultiTs('e2e/spec.ts')
+    const results = await lintMultiTs('e2e/spec.ts')
 
-    expect(result).toContainEqual(
+    expect(results).toContainEqual(
       expect.objectContaining({ ruleId: 'ts/promise-function-async' }),
     )
   })
@@ -122,10 +126,65 @@ describe('tsconfigPath as an array unlocks non-standard tsconfig names', () => {
 
 describe('intentional opt-outs stay off', () => {
   it('ts/no-floating-promises does NOT fire even on a floating Promise', async () => {
-    const result = await lint(typeAwareFixturePath, tsOptions)
-    const matching = result.filter((result) => result.ruleId === 'ts/no-floating-promises')
+    const results = await lint(typeAwareFixturePath, tsOptions)
+    const matching = results.filter((result) => result.ruleId === 'ts/no-floating-promises')
 
     expect(matching).toEqual([])
+  })
+
+  /*
+   * The fixtures below each contain a construct the rule WOULD flag if enabled, so a clean
+   * result proves the rule is genuinely inert on real code, not merely that the config entry
+   * reads `off`. unicorn/number-literal-case doubles as the regression guard for the
+   * eslint-config-prettier disable spread: if that set failed to apply, the lowercase hex
+   * literal would be reported.
+   */
+  it('import/consistent-type-specifier-style stays off on an inline type specifier', async () => {
+    const results = await lint('test/fixtures/optouts/typespec.ts')
+    const matching = results.filter(
+      (finding) => finding.ruleId === 'import/consistent-type-specifier-style',
+    )
+
+    expect(matching).toEqual([])
+  })
+
+  it('jsonc/sort-keys stays off on an unsorted object', async () => {
+    const results = await lint('test/fixtures/optouts/unsorted.json')
+    const matching = results.filter((finding) => finding.ruleId === 'jsonc/sort-keys')
+
+    expect(matching).toEqual([])
+  })
+
+  it('unicorn/number-literal-case stays off on a lowercase hex literal', async () => {
+    const results = await lint('test/fixtures/optouts/hex.ts')
+    const matching = results.filter(
+      (finding) => finding.ruleId === 'unicorn/number-literal-case',
+    )
+
+    expect(matching).toEqual([])
+  })
+
+  it('antfu/consistent-chaining stays off on an inconsistently wrapped chain', async () => {
+    const results = await lint('test/fixtures/optouts/chaining.ts')
+    const matching = results.filter(
+      (finding) => finding.ruleId === 'antfu/consistent-chaining',
+    )
+
+    expect(matching).toEqual([])
+  })
+})
+
+describe('ts/consistent-type-imports inlines the type specifier when autofixed', () => {
+  /*
+   * The maninak-specific choice here is `fixStyle: 'inline-type-imports'`, which is only
+   * observable in the fix output: a value+type import from one module must collapse to a
+   * single statement with an inline `type` keyword, not split into a separate `import type`.
+   */
+  it('produces an inline `type` keyword rather than a separate import type statement', async () => {
+    const fixed = await lintAndFix('test/fixtures/optouts/type-import.ts')
+
+    expect(fixed).toMatch(/import\s*\{[^}]*\btype WriteStream\b[^}]*\}/)
+    expect(fixed).not.toMatch(/import type\s*\{/)
   })
 })
 
@@ -137,26 +196,26 @@ describe('vue rules fire on .vue files when vue is a consumer dep', () => {
     )
   }
 
-  it('vue/define-props-declaration flags the runtime (non-type-based) form', async () => {
-    const result = await lintVue()
+  it('vue/define-props-declaration flags the runtime (non-type-based) form (at warn severity)', async () => {
+    const results = await lintVue()
 
-    expect(result).toContainEqual(
-      expect.objectContaining({ ruleId: 'vue/define-props-declaration' }),
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'vue/define-props-declaration', severity: 1 }),
     )
   })
 
   it('vue/define-emits-declaration flags the array form', async () => {
-    const result = await lintVue()
+    const results = await lintVue()
 
-    expect(result).toContainEqual(
+    expect(results).toContainEqual(
       expect.objectContaining({ ruleId: 'vue/define-emits-declaration' }),
     )
   })
 
   it('vue/html-button-has-type flags a <button> without type attribute', async () => {
-    const result = await lintVue()
+    const results = await lintVue()
 
-    expect(result).toContainEqual(
+    expect(results).toContainEqual(
       expect.objectContaining({ ruleId: 'vue/html-button-has-type' }),
     )
   })
@@ -185,31 +244,31 @@ describe('jsdoc/require-jsdoc (opt-in via requireJsdocInUtils)', () => {
   const jsdocOpts = { requireJsdocInUtils: true }
 
   it('flags an undocumented exported function under utils/', async () => {
-    const result = await callAtDir(
+    const results = await callAtDir(
       'test/fixtures/jsdoc-project',
       async () => await lint('src/utils/exports.ts', jsdocOpts),
     )
 
-    expect(result).toContainEqual(expect.objectContaining({ ruleId: 'jsdoc/require-jsdoc' }))
+    expect(results).toContainEqual(expect.objectContaining({ ruleId: 'jsdoc/require-jsdoc' }))
   })
 
   it('fires only on the undocumented export, not on the two documented ones', async () => {
-    const result = await callAtDir(
+    const results = await callAtDir(
       'test/fixtures/jsdoc-project',
       async () => await lint('src/utils/exports.ts', jsdocOpts),
     )
-    const matching = result.filter((result) => result.ruleId === 'jsdoc/require-jsdoc')
+    const matching = results.filter((result) => result.ruleId === 'jsdoc/require-jsdoc')
 
     expect(matching).toHaveLength(1)
   })
 
   it('does not require @param or @returns (description alone is enough)', async () => {
-    const result = await callAtDir(
+    const results = await callAtDir(
       'test/fixtures/jsdoc-project',
       async () => await lint('src/utils/exports.ts', jsdocOpts),
     )
     // The `tagless` export starts around line 23; no jsdoc rule should complain about it.
-    const onTagless = result.filter(
+    const onTagless = results.filter(
       (result) => result.line >= 23 && (result.ruleId?.startsWith('jsdoc/') ?? false),
     )
 
@@ -217,18 +276,18 @@ describe('jsdoc/require-jsdoc (opt-in via requireJsdocInUtils)', () => {
   })
 
   it('does not require jsdoc on test files even when opted in', async () => {
-    const result = await lint('test/behaviour.test.ts', jsdocOpts)
-    const matching = result.filter((result) => result.ruleId === 'jsdoc/require-jsdoc')
+    const results = await lint('test/behaviour.test.ts', jsdocOpts)
+    const matching = results.filter((result) => result.ruleId === 'jsdoc/require-jsdoc')
 
     expect(matching).toEqual([])
   })
 
   it('does NOT fire by default (option off)', async () => {
-    const result = await callAtDir(
+    const results = await callAtDir(
       'test/fixtures/jsdoc-project',
       async () => await lint('src/utils/exports.ts'),
     )
-    const matching = result.filter((result) => result.ruleId === 'jsdoc/require-jsdoc')
+    const matching = results.filter((result) => result.ruleId === 'jsdoc/require-jsdoc')
 
     expect(matching).toEqual([])
   })
@@ -405,26 +464,65 @@ describe('JSX attribute quote style)', () => {
   }
 
   it('flags single-quoted JSX attributes', async () => {
-    const result = await lintJsx('single-quotes.tsx')
+    const results = await lintJsx('single-quotes.tsx')
 
-    expect(result).toContainEqual(expect.objectContaining({ ruleId: 'prettier/prettier' }))
+    expect(results).toContainEqual(expect.objectContaining({ ruleId: 'prettier/prettier' }))
   })
 
   it('accepts double-quoted JSX attributes', async () => {
-    const result = await lintJsx('double-quotes.tsx')
+    const results = await lintJsx('double-quotes.tsx')
 
-    expect(result).toEqual([])
+    expect(results).toEqual([])
+  })
+})
+
+describe('vue version-gated rules fire on the right constructs', () => {
+  async function lintVueFile(file: string): Promise<Awaited<ReturnType<typeof lint>>> {
+    return await callAtDir('test/fixtures/vue-project', async () => await lint(file))
+  }
+
+  it('vue/prefer-use-template-ref flags a ref() bound to a template ref (Vue 3.5+ API)', async () => {
+    const results = await lintVueFile('TemplateRef.vue')
+
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'vue/prefer-use-template-ref' }),
+    )
+  })
+
+  it('vue/html-self-closing flags an unclosed void element', async () => {
+    const results = await lintVueFile('SelfClosing.vue')
+
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'vue/html-self-closing' }),
+    )
+  })
+
+  it('vue/max-template-depth flags nesting one level past the limit (depth 9)', async () => {
+    const results = await lintVueFile('DeepTemplate.vue')
+
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'vue/max-template-depth' }),
+    )
+  })
+
+  it('vue/max-template-depth accepts nesting at the limit (depth 8)', async () => {
+    const results = await lintVueFile('ShallowTemplate.vue')
+    const matching = results.filter((finding) => finding.ruleId === 'vue/max-template-depth')
+
+    expect(matching).toEqual([])
   })
 })
 
 describe('prettier-vue rules fire on .vue files', () => {
   it('prettier-vue/prettier flags formatting issues', async () => {
-    const result = await callAtDir(
+    const results = await callAtDir(
       'test/fixtures/vue-project',
       async () => await lint('Component.vue'),
     )
 
-    expect(result).toContainEqual(expect.objectContaining({ ruleId: 'prettier-vue/prettier' }))
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'prettier-vue/prettier' }),
+    )
   })
 })
 

@@ -10,16 +10,17 @@ describe('factory', () => {
     expect(cfg.length).toBeGreaterThan(5)
   })
 
-  it('user-supplied configs override earlier blocks', async () => {
+  it('user-supplied configs override earlier blocks (a later off actually silences a rule)', async () => {
     const eslint = new ESLint({
       overrideConfigFile: true,
       overrideConfig: await maninak({}, { rules: { 'no-debugger': 'off' as const } }),
     })
-    const resolved = (await eslint.calculateConfigForFile('foo.ts')) as {
-      rules?: { 'no-debugger'?: [number, ...unknown[]] }
-    }
+    const results = await eslint.lintFiles(['test/fixtures/typescript.ts'])
+    const debuggerFindings = results
+      .flatMap((result) => result.messages)
+      .filter((message) => message.ruleId === 'no-debugger')
 
-    expect(resolved.rules?.['no-debugger']?.[0]).toBe(0)
+    expect(debuggerFindings).toEqual([])
   })
 
   it('exposes a callable default export', () => {

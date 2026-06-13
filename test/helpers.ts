@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { ESLint } from 'eslint'
 import maninak from '../src/index.js'
@@ -88,6 +89,25 @@ export async function lint(
       message: msg.message,
     })),
   )
+}
+
+/**
+ * Lints `fixturePath` under maninak(`options`) with autofix enabled and returns the fixed
+ * source (or the original text when nothing was fixed). Use this for the few rules whose
+ * maninak-specific choice lives in the *fix output* rather than in whether the rule fires,
+ * e.g. `ts/consistent-type-imports` with `fixStyle: 'inline-type-imports'`. Kept separate from
+ * the memoized {@link lint} path because fixing needs its own `fix: true` ESLint instance.
+ */
+export async function lintAndFix(
+  fixturePath: string,
+  options: Parameters<typeof maninak>[0] = {},
+): Promise<string> {
+  const config = await maninak(options)
+  const eslint = new ESLint({ overrideConfigFile: true, overrideConfig: config, fix: true })
+  const results = await eslint.lintFiles([fixturePath])
+  const fixed = results[0]?.output ?? readFileSync(fixturePath, 'utf-8')
+
+  return fixed
 }
 
 /**
