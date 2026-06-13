@@ -167,7 +167,10 @@ export default function buildConfig() {
           'ts/prefer-readonly': 'warn',
           'ts/no-unnecessary-qualifier': 'warn',
           'ts/no-duplicate-type-constituents': 'warn',
-          'ts/no-confusing-void-expression': 'warn',
+          // `ignoreArrowShorthand` permits the common `() => sideEffectReturningVoid()`
+          // form (e.g. `{ dispose: () => watcher.close() }`), which is unambiguous and
+          // reads better as a one-liner than the brace-wrapped block the rule otherwise demands.
+          'ts/no-confusing-void-expression': ['warn', { ignoreArrowShorthand: true }],
         },
       },
     },

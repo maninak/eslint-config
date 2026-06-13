@@ -98,6 +98,14 @@ describe('type-aware rules auto-activate when tsconfig.json sits at cwd', () => 
   })
 })
 
+describe('type-aware overrides apply when tsconfigPath is set', () => {
+  it('ts/no-confusing-void-expression ignores arrow shorthand', async () => {
+    const rule = await resolveRule(tsFixturePath, 'ts/no-confusing-void-expression', tsOptions)
+
+    expect(rule).toMatchObject(['warn', { ignoreArrowShorthand: true }])
+  })
+})
+
 describe('tsconfigPath as an array unlocks non-standard tsconfig names', () => {
   async function lintMultiTs(file: string): Promise<Awaited<ReturnType<typeof lint>>> {
     return await callAtDir('test/fixtures/multi-ts', async () => {
