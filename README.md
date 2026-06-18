@@ -2,7 +2,8 @@
 
 > _No-sweat, lint and format everything_! 🪄
 
-[![Sponsor maninak on Liberapay](https://img.shields.io/liberapay/patrons/maninak.svg?logo=liberapay)](https://liberapay.com/maninak/donate)
+[![Sponsor maninak on Liberapay](https://img.shields.io/badge/Liberapay-Donate-F6C915?logo=liberapay&logoColor=black)](https://liberapay.com/maninak/donate)
+
 [![NPM downloads per week](https://img.shields.io/npm/dw/@maninak/eslint-config.svg)](https://npm-stat.com/charts.html?package=%40maninak%2Feslint-config)
 [![Repos depending on @maninak/eslint-config](https://badgen.net/github/dependents-repo/maninak/eslint-config?color=blue)](https://github.com/maninak/eslint-config/network/dependents)
 [![Github stars](https://badgen.net/github/stars/maninak/eslint-config)](https://github.com/maninak/eslint-config/stargazers)
@@ -326,9 +327,15 @@ To silence a rule across the entire file, put the `eslint-disable` at the top wi
 
 ## Support
 
-If this config saves you time, consider [sponsoring on Liberapay](https://liberapay.com/maninak/donate). Recurring micro-donations help me keep maintaining it (and all my other tools) in the open.
+If this library saves you time, or you would like to see it keep getting better, here are a few ways to appreciate prior and support further development:
 
-[![Donate using Liberapay](https://liberapay.com/assets/widgets/donate.svg)](https://liberapay.com/maninak/donate)
+- 🌱 Star this repo on [GitHub](https://github.com/cytechmobile/radicle-vscode-extension) and seed it on [Radicle](https://app.radicle.at/nodes/seed.radicle.at/rad:z3Makm6fsQQXmpSFE43DZqwupaEhk)
+- 🗣️ Share it with colleagues, or leave a rating on the [VS Marketplace](https://marketplace.visualstudio.com/items?itemName=radicle-ide-plugins-team.radicle) or [Open VSX](https://open-vsx.org/extension/radicle-ide-plugins-team/radicle)
+- 💛 Chip in a recurring micro-donation on Liberapay, if you can comfortably spare it.
+
+[![Sponsor maninak on Liberapay](https://img.shields.io/badge/Liberapay-Donate-F6C915?logo=liberapay&logoColor=black)](https://liberapay.com/maninak/donate)
+
+Every bit, a kind message included, makes maintaining this and my other open-source tools more sustainable. Thank you!
 
 ## License
 
