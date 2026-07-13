@@ -64,12 +64,18 @@ Add the following to your `package.json` for local and CI invocation:
 ```json
 {
   "scripts": {
-    "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-location node_modules/.cache/eslint"
+    "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-strategy content --cache-location node_modules/.cache/eslint"
   }
 }
 ```
 
 > _To lint and auto-fix all files: `npm run lint -- --fix`._
+
+> _`--cache-strategy content` keys the cache on file **content** rather than the default
+> mtime+size. It costs a cheap hash per file but the cache then survives changes that do not
+> touch content: a `git checkout`, a branch switch, a fresh `git worktree`, or a
+> format-on-save no-op. Without it, any of those invalidates the whole cache and the next run
+> is a cold, full re-lint._
 
 ### 4. VS Code Support
 
@@ -87,9 +93,17 @@ Then create `.vscode/settings.json` with the following and commit both files to 
 
 ```jsonc
 {
-  // Disable the Prettier VS Code extension; eslint-plugin-prettier handles formatting
+  // Disable the Prettier VS Code extension; eslint-plugin-prettier handles formatting.
+  // Running both the Prettier extension and ESLint fix-on-save makes them fight over the
+  // same edits, which shows up as a `prettier/prettier` warning that reappears every save.
   "prettier.enable": false,
   "editor.formatOnSave": false,
+
+  // Pin the editor to 2-space indentation so it never inserts 4-space indents that
+  // `prettier/prettier` then flags on every keystroke. The .editorconfig below enforces the
+  // same; these two settings are the belt-and-suspenders for editors that ignore it.
+  "editor.tabSize": 2,
+  "editor.detectIndentation": false,
 
   // Auto-fix lint errors and auto-add missing imports on save
   "editor.codeActionsOnSave": {
@@ -199,7 +213,7 @@ Add the following to your `package.json`:
 ```jsonc
 {
   "scripts": {
-    "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-location node_modules/.cache/eslint",
+    "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-strategy content --cache-location node_modules/.cache/eslint",
     // Ensures git hooks remain installed
     "postinstall": "npx simple-git-hooks",
   },
