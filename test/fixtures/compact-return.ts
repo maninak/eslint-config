@@ -64,3 +64,35 @@ function _switchWithCaseReturn(_x: number) {
       return 'other'
   }
 }
+
+// @case compact-standalone-comment
+// A standalone comment sits in the blank gap: the fix removes the blank line but keeps the
+// comment (a blanket collapse of the whitespace range would delete it).
+function _compactWithComment(_x: number) {
+  const _doubled = _x * 2
+
+  // keep this explanation
+  return _doubled
+}
+
+// @case compact-trailing-comment
+// A trailing comment on the previous statement's line, exactly the try-block guard pattern.
+// Removing the blank must keep the trailing comment on its line.
+function _compactTrailingComment(_x: number): boolean {
+  try {
+    void _x // getter will throw if disposed
+
+    return false
+  } catch {
+    return true
+  }
+}
+
+// @case noncompact-trailing-comment-fire
+// Three statements, no blank before return, and the statement above return has a trailing
+// comment. The required blank must land after that comment, not split it off.
+function _noncompactTrailingComment(_x: number) {
+  const _doubled = _x * 2
+  const _tripled = _x * 3 // scaled up
+  return _doubled + _tripled
+}

@@ -47,3 +47,10 @@ export function caseTagged(x: number): number {
  * Second paragraph of the description.
  */
 export function caseMultiParagraph(): void {}
+
+// @case keep-too-long
+/**
+ * This description is deliberately long enough that collapsing it onto a single line would
+ * overflow the ninety-five column print width, so the rule must leave it multiline.
+ */
+export function caseTooLong(): void {}

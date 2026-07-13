@@ -14,8 +14,8 @@ import type { Node } from 'estree'
  *   long-standing `always(*, return)` behavior.
  *
  * A `return` that is the first statement in its block is left untouched (nothing to separate).
- * Comments between the previous statement and the `return` are preserved; the rule only adds
- * or removes blank lines in the gap that is free of comment text.
+ * The fix only ever adds or removes blank lines: any comment in the gap, whether trailing the
+ * previous statement's line or standing on its own line, is always preserved.
  */
 const compactReturn: Rule.RuleModule = {
   meta: {
@@ -110,15 +110,18 @@ const compactReturn: Rule.RuleModule = {
           node,
           messageId: 'noBlankInCompact',
           fix(fixer) {
-            // Collapse the gap between the two statements to a single newline, preserving any
-            // indentation that precedes the return token.
-            const between = src.getText().slice(prev.range![1], node.range![0])
-            const trailingIndent = between.slice(between.lastIndexOf('\n') + 1)
-
-            return fixer.replaceTextRange(
-              [prev.range![1], node.range![0]],
-              `\n${trailingIndent}`,
+            const gap = src.getText().slice(prev.range![1], node.range![0])
+            // Drop only the blank (whitespace-only) lines in the gap. The first segment is
+            // whatever trails the previous statement on its line (e.g. a `// comment`), the
+            // last is the indentation before `return`; both are kept, as is any standalone
+            // comment line between them. A blanket collapse would delete those comments.
+            const segments = gap.split('\n')
+            const kept = segments.filter(
+              (segment, i) =>
+                i === 0 || i === segments.length - 1 || segment.trim().length > 0,
             )
+
+            return fixer.replaceTextRange([prev.range![1], node.range![0]], kept.join('\n'))
           },
         })
 
@@ -130,7 +133,12 @@ const compactReturn: Rule.RuleModule = {
           node,
           messageId: 'blankRequired',
           fix(fixer) {
-            return fixer.insertTextAfter(prev, '\n')
+            // Anchor the blank on the token or comment immediately before `return`, not on the
+            // previous statement node. That keeps a comment trailing the previous statement
+            // attached to it and lands the blank before `return`, instead of inserting it
+            // between the statement and its own trailing comment.
+            const before = src.getTokenBefore(node, { includeComments: true })
+            return before ? fixer.insertTextAfter(before, '\n') : null
           },
         })
       }

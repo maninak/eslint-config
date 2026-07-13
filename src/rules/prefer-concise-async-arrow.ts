@@ -25,6 +25,8 @@ const preferConciseAsyncArrow: Rule.RuleModule = {
   },
 
   create(context) {
+    const src = context.sourceCode
+
     return {
       ArrowFunctionExpression(node) {
         if (!node.async) {
@@ -34,7 +36,8 @@ const preferConciseAsyncArrow: Rule.RuleModule = {
           return
         }
 
-        const { body: statements } = node.body
+        const block = node.body
+        const { body: statements } = block
         if (statements.length !== 1) {
           return
         }
@@ -47,19 +50,20 @@ const preferConciseAsyncArrow: Rule.RuleModule = {
           return
         }
 
-        const awaitExpr = statement.expression
+        // Collapsing the block would discard any comment sitting inside the braces, so report
+        // the violation but leave the fix off rather than silently drop the comment.
+        const hasInnerComments = src.getCommentsInside(block).length > 0
 
         context.report({
           node,
           messageId: 'preferConcise',
-          fix(fixer) {
-            const src = context.sourceCode
-            const awaitText = src.getText(awaitExpr)
-            // Always wrap params in parens to match the `arrow-parens: always` rule.
-            const paramsText = `(${node.params.map((param) => src.getText(param)).join(', ')})`
-
-            return fixer.replaceText(node, `async ${paramsText} => ${awaitText}`)
-          },
+          fix: hasInnerComments
+            ? undefined
+            : (fixer) =>
+                // Replace ONLY the block body with the await expression. This preserves the
+                // async keyword, params, generics, and any return-type annotation, none of
+                // which a from-scratch reconstruction of the node would keep.
+                fixer.replaceText(block, src.getText(statement.expression)),
         })
       },
     }

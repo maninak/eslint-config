@@ -202,34 +202,89 @@ describe('maninak/prefer-concise-async-arrow', () => {
    * `async () => await expr` is semantically equivalent and prettier leaves it alone.
    * The rule auto-fixes in the right direction so prettier/prettier stops firing.
    */
+  const fixturePath = 'test/fixtures/inline-callback.ts'
+  const ruleId = 'maninak/prefer-concise-async-arrow'
+
+  function getCaseArea(caseName: string): { start: number; end: number } {
+    const lines = readFileSync(fixturePath, 'utf-8').split('\n')
+    const startIdx = lines.findIndex((ln) => ln.includes(`@case ${caseName}`))
+
+    if (startIdx === -1) {
+      throw new Error(`Case not found: ${caseName}`)
+    }
+
+    const endIdx = lines.findIndex((ln, idx) => idx > startIdx && ln.includes('@case'))
+    const start = startIdx + 2
+    const end = endIdx === -1 ? lines.length : endIdx + 1
+
+    return { start, end }
+  }
+
+  function caseHasViolation(
+    results: Awaited<ReturnType<typeof lint>>,
+    caseName: string,
+  ): boolean {
+    const { start, end } = getCaseArea(caseName)
+
+    return results.some(
+      (result) => result.ruleId === ruleId && result.line >= start && result.line <= end,
+    )
+  }
 
   it('fires on a single-await block body (at warn severity)', async () => {
-    const results = await lint('test/fixtures/inline-callback.ts')
+    const results = await lint(fixturePath)
 
-    expect(results).toContainEqual(
-      expect.objectContaining({
-        ruleId: 'maninak/prefer-concise-async-arrow',
-        severity: 1,
-      }),
-    )
+    expect(results).toContainEqual(expect.objectContaining({ ruleId, severity: 1 }))
   })
 
   it('does NOT fire when the block body has more than one statement', async () => {
-    const results = await lint('test/fixtures/inline-callback.ts')
-    // The multi-statement block starts at line 6 in the fixture.
-    const multiStatementLines = results.filter(
-      (finding) =>
-        finding.ruleId === 'maninak/prefer-concise-async-arrow' && finding.line >= 6,
-    )
+    const results = await lint(fixturePath)
 
-    expect(multiStatementLines).toHaveLength(0)
+    expect(caseHasViolation(results, 'multi-statement')).toBe(false)
+  })
+
+  it('still fires (reports) when a comment sits inside the block', async () => {
+    const results = await lint(fixturePath)
+
+    expect(caseHasViolation(results, 'comment-inside')).toBe(true)
   })
 
   it('auto-fixes to the concise form prettier accepts without rewriting', async () => {
-    const fixed = await lintAndFix('test/fixtures/inline-callback.ts')
+    const fixed = await lintAndFix(fixturePath)
 
     expect(fixed).toContain('async () => await initGitRepo()')
     expect(fixed).not.toContain('{ await initGitRepo() }')
+  })
+
+  it('preserves the return-type annotation and typed params in the fix', async () => {
+    const fixed = await lintAndFix(fixturePath)
+
+    // Body-only replacement keeps `: Promise<void>` and the typed param; a from-scratch
+    // reconstruction of the node from `node.params` would have dropped both.
+    expect(fixed).toContain('async (): Promise<void> => await teardown()')
+    expect(fixed).toContain('async (count: number): Promise<void> => await consume(count)')
+  })
+
+  it('does NOT fix (keeps the block) when that would drop an inner comment', async () => {
+    const fixed = await lintAndFix(fixturePath)
+
+    expect(fixed).toContain('// keep this note')
+    expect(fixed).not.toContain('async () => await boot()')
+  })
+
+  it('reaches a fixed point (a second fix pass changes nothing)', async () => {
+    const fixed = await lintAndFix(fixturePath)
+    const { writeFileSync, rmSync } = await import('node:fs')
+    const settledPath = 'test/fixtures/async-arrow-settled.ts'
+    writeFileSync(settledPath, fixed)
+
+    try {
+      const refixed = await lintAndFix(settledPath)
+
+      expect(refixed).toBe(fixed)
+    } finally {
+      rmSync(settledPath, { force: true })
+    }
   })
 })
 
@@ -451,6 +506,12 @@ describe('maninak/jsdoc-oneline', () => {
     expect(caseHasViolation(results, 'keep-multiparagraph')).toBe(false)
   })
 
+  it('leaves a block untouched when its one-line form would exceed the print width', async () => {
+    const results = await lint(fixturePath)
+
+    expect(caseHasViolation(results, 'keep-too-long')).toBe(false)
+  })
+
   it('auto-fix collapses every malformed variant to the same one-line form', async () => {
     const fixed = await lintAndFix(fixturePath)
     const occurrences = fixed.split('\n').filter((line) => line.trim() === expected)
@@ -460,6 +521,23 @@ describe('maninak/jsdoc-oneline', () => {
     // The tag-bearing and multi-paragraph blocks must remain multiline (still contain ` * `).
     expect(fixed).toContain('* @param x the input value')
     expect(fixed).toContain('* Second paragraph of the description.')
+    // The too-long block must also stay multiline (fix would have overflowed the print width).
+    expect(fixed).toContain('* This description is deliberately long enough')
+  })
+
+  it('reaches a fixed point (a second fix pass changes nothing)', async () => {
+    const fixed = await lintAndFix(fixturePath)
+    const { writeFileSync, rmSync } = await import('node:fs')
+    const settledPath = 'test/fixtures/jsdoc-oneline-settled.ts'
+    writeFileSync(settledPath, fixed)
+
+    try {
+      const refixed = await lintAndFix(settledPath)
+
+      expect(refixed).toBe(fixed)
+    } finally {
+      rmSync(settledPath, { force: true })
+    }
   })
 })
 
@@ -692,6 +770,46 @@ describe('maninak/compact-return', () => {
 
     expect(fixed).toMatch(/const _doubled = _x \* 2\n {2}return _doubled/)
     expect(fixed).toMatch(/const _tripled = _x \* 3\n\n {2}return _doubled \+ _tripled/)
+  })
+
+  it('fixes a compact blank with a standalone comment in the gap, keeping the comment', async () => {
+    const fixed = await lintAndFix(fixturePath)
+
+    // The blank line is removed but the standalone comment survives on its own line.
+    expect(fixed).toMatch(
+      /const _doubled = _x \* 2\n {2}\/\/ keep this explanation\n {2}return _doubled/,
+    )
+  })
+
+  it('removes the blank while keeping a trailing comment (the try-block guard pattern)', async () => {
+    const fixed = await lintAndFix(fixturePath)
+
+    // This is the reported case: `void _x // comment` then a blank then `return`. The blank
+    // must go and the trailing comment must stay on the previous statement's line.
+    expect(fixed).toMatch(/void _x \/\/ getter will throw if disposed\n {4}return false/)
+  })
+
+  it('adds the required blank AFTER a trailing comment, not splitting the comment off', async () => {
+    const fixed = await lintAndFix(fixturePath)
+
+    expect(fixed).toMatch(
+      /const _tripled = _x \* 3 \/\/ scaled up\n\n {2}return _doubled \+ _tripled/,
+    )
+  })
+
+  it('reaches a fixed point (a second fix pass changes nothing)', async () => {
+    const fixed = await lintAndFix(fixturePath)
+    const { writeFileSync, rmSync } = await import('node:fs')
+    const settledPath = 'test/fixtures/compact-return-settled.ts'
+    writeFileSync(settledPath, fixed)
+
+    try {
+      const refixed = await lintAndFix(settledPath)
+
+      expect(refixed).toBe(fixed)
+    } finally {
+      rmSync(settledPath, { force: true })
+    }
   })
 })
 
