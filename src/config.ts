@@ -619,7 +619,12 @@ export default function buildConfig() {
                   groups: ['props', 'data', 'computed', 'methods', 'setup'],
                 },
               ],
-              'vue/no-undef-components': 'warn',
+              // Nuxt auto-imports its built-ins (NuxtLink, NuxtPage, ...) and every component
+              // under `components/`, none of which this rule can see, so under Nuxt it only
+              // false-positives. Turn it off there; the real restore is the `@nuxt/eslint`
+              // module, whose generated flat config registers the auto-imported components.
+              // In non-Nuxt Vue projects the rule stays on, where it is genuinely useful.
+              'vue/no-undef-components': isInConsumerDeps('nuxt') ? 'off' : 'warn',
               'vue/no-undef-properties': 'warn',
               'vue/max-template-depth': ['warn', { maxDepth: 8 }],
               'vue/no-required-prop-with-default': ['warn', { autofix: false }],

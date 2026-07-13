@@ -1,20 +1,113 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
+import { globSync } from 'tinyglobby'
+import { parse as parseYaml } from 'yaml'
+
+interface PackageJsonDeps {
+  dependencies?: Record<string, string>
+  devDependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+  workspaces?: string[] | { packages?: string[] }
+}
+
+function readPackageJsonAt(dir: string): PackageJsonDeps | undefined {
+  try {
+    return JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8')) as PackageJsonDeps
+  } catch {
+    return undefined
+  }
+}
 
 /**
- * True when `name` is declared in the consumer's `package.json` as a regular, dev, or peer
- * dependency. We deliberately do not walk `node_modules`: under pnpm's strict layout, maninak's
- * own transitive deps (e.g. `react` riding in via eslint-plugin-vue, or `tailwindcss` riding
- * in as a peer-auto-install of eslint-plugin-tailwindcss) leak into resolution checks and
- * produce false positives. The consumer's declared deps are the authoritative answer for
- * "does the user intend to lint this kind of file".
+ * The workspace package globs a monorepo declares, read from `pnpm-workspace.yaml`
+ * (`packages`) or, failing that, the root `package.json` `workspaces` field (array or
+ * `{ packages }`). A `pnpm-workspace.yaml` that carries only other settings (e.g.
+ * `allowBuilds`) yields no globs, so a single-package consumer is treated exactly as before.
  */
-export function isInConsumerDeps(name: string): boolean {
-  const pkg = readConsumerPackageJson()
-  if (!pkg) {
-    return false
+function getWorkspaceGlobs(root: string, rootPkg: PackageJsonDeps | undefined): string[] {
+  const pnpmWorkspacePath = path.join(root, 'pnpm-workspace.yaml')
+  if (existsSync(pnpmWorkspacePath)) {
+    try {
+      const parsed = parseYaml(readFileSync(pnpmWorkspacePath, 'utf8')) as
+        | { packages?: unknown }
+        | undefined
+      if (Array.isArray(parsed?.packages)) {
+        return parsed.packages.filter((glob): glob is string => typeof glob === 'string')
+      }
+    } catch {
+      // Malformed yaml: fall through to the package.json `workspaces` field.
+    }
   }
 
+  const workspaces = rootPkg?.workspaces
+  if (Array.isArray(workspaces)) {
+    return workspaces.filter((glob): glob is string => typeof glob === 'string')
+  }
+  if (workspaces && Array.isArray(workspaces.packages)) {
+    return workspaces.packages.filter((glob): glob is string => typeof glob === 'string')
+  }
+
+  return []
+}
+
+const workspaceDepsCache = new Map<string, PackageJsonDeps[]>()
+
+/**
+ * Every declared-dependency set in the consumer's workspace: the root `package.json` plus each
+ * sub-package `package.json` reachable through the workspace globs. Cached per cwd (detection
+ * runs once per `maninak()` call, and several framework checks share the same scan).
+ *
+ * We read DECLARED deps only and never walk `node_modules`. Under pnpm's strict layout
+ * maninak's own transitive deps leak into resolution (e.g. `react` riding in via
+ * eslint-plugin-vue, or `tailwindcss` as a peer-auto-install of eslint-plugin-tailwindcss); a
+ * resolvability check would turn those into false positives. The consumer's declared deps,
+ * anywhere in the workspace, are the authoritative answer for "does the user intend to lint
+ * this kind of file".
+ */
+function getWorkspacePackageJsons(): PackageJsonDeps[] {
+  const root = process.cwd()
+  const cached = workspaceDepsCache.get(root)
+  if (cached) {
+    return cached
+  }
+
+  const rootPkg = readPackageJsonAt(root)
+  const result: PackageJsonDeps[] = rootPkg ? [rootPkg] : []
+
+  const globs = getWorkspaceGlobs(root, rootPkg)
+  if (globs.length > 0) {
+    // Positive globs select package dirs; a `!`-prefixed glob (pnpm negation) is an ignore.
+    const positive = globs
+      .filter((glob) => !glob.startsWith('!'))
+      .map((glob) => `${glob}/package.json`)
+    const negative = globs
+      .filter((glob) => glob.startsWith('!'))
+      .map((glob) => `${glob.slice(1)}/package.json`)
+
+    try {
+      const matches = globSync(positive, {
+        cwd: root,
+        ignore: ['**/node_modules/**', ...negative],
+        absolute: true,
+      })
+
+      for (const match of matches) {
+        const pkg = readPackageJsonAt(path.dirname(match))
+        if (pkg) {
+          result.push(pkg)
+        }
+      }
+    } catch {
+      // Glob failure degrades gracefully to root-only detection.
+    }
+  }
+
+  workspaceDepsCache.set(root, result)
+
+  return result
+}
+
+function isDeclaredIn(pkg: PackageJsonDeps, name: string): boolean {
   return (
     name in (pkg.dependencies ?? {}) ||
     name in (pkg.devDependencies ?? {}) ||
@@ -22,57 +115,49 @@ export function isInConsumerDeps(name: string): boolean {
   )
 }
 
+/**
+ * True when `name` is declared as a regular, dev, or peer dependency anywhere in the
+ * consumer's workspace: the root `package.json` or any sub-package reachable through the
+ * workspace globs. This lets a plain `maninak()` enable Vue/Nuxt/Svelte/React config when the
+ * framework lives in a sub-package (e.g. `apps/web`) rather than the workspace root.
+ */
+export function isInConsumerDeps(name: string): boolean {
+  return getWorkspacePackageJsons().some((pkg) => isDeclaredIn(pkg, name))
+}
+
 const DEFAULT_VUE_VERSION_TARGET = 3.5
 
 /**
- * Returns a numeric Vue major.minor version inferred from the consumer's `package.json` `vue`
- * (or `nuxt`) dependency range, or {@link DEFAULT_VUE_VERSION_TARGET} when nothing is
- * declared.
+ * Returns a numeric Vue major.minor version inferred from the `vue` (or `nuxt`) dependency
+ * range declared anywhere in the consumer's workspace, or {@link DEFAULT_VUE_VERSION_TARGET}
+ * when nothing is declared.
  *
  * The number is intentionally lossy: only the first two components are kept (3.5, 3.4, 3.0,
  * 2.7 etc.) because that's all the version-gated rule sections need to distinguish. Build
  * metadata, patch versions, pre-release tags, and prefixes (`^`, `~`, `>=`, `workspace:`,
  * `npm:`) are stripped before parsing.
  *
- * Auto-detection is just a default. Consumers who want a different gating can override any
- * rule in their own `eslint.config.mjs` by appending a config block that re-sets the rule.
+ * Auto-detection is just a default. Consumers who want different gating can override any rule
+ * in their own `eslint.config.mjs` by appending a config block that re-sets the rule.
  */
 export function getConsumerVueVersion(): number {
-  const pkg = readConsumerPackageJson()
-  if (!pkg) {
-    return DEFAULT_VUE_VERSION_TARGET
-  }
-  const range =
-    pkg.dependencies?.['vue'] ??
-    pkg.devDependencies?.['vue'] ??
-    pkg.peerDependencies?.['vue'] ??
-    pkg.dependencies?.['nuxt'] ??
-    pkg.devDependencies?.['nuxt']
-  if (!range) {
-    return DEFAULT_VUE_VERSION_TARGET
-  }
-  const match = /(\d+)\.(\d+)/.exec(range)
-  if (!match) {
-    return DEFAULT_VUE_VERSION_TARGET
+  for (const pkg of getWorkspacePackageJsons()) {
+    const range =
+      pkg.dependencies?.['vue'] ??
+      pkg.devDependencies?.['vue'] ??
+      pkg.peerDependencies?.['vue'] ??
+      pkg.dependencies?.['nuxt'] ??
+      pkg.devDependencies?.['nuxt']
+    if (!range) {
+      continue
+    }
+    const match = /(\d+)\.(\d+)/.exec(range)
+    if (match) {
+      return Number.parseFloat(`${match[1]}.${match[2]}`)
+    }
   }
 
-  return Number.parseFloat(`${match[1]}.${match[2]}`)
-}
-
-interface PackageJsonDeps {
-  dependencies?: Record<string, string>
-  devDependencies?: Record<string, string>
-  peerDependencies?: Record<string, string>
-}
-
-function readConsumerPackageJson(): PackageJsonDeps | undefined {
-  try {
-    return JSON.parse(
-      readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'),
-    ) as PackageJsonDeps
-  } catch {
-    return undefined
-  }
+  return DEFAULT_VUE_VERSION_TARGET
 }
 
 /** True when the consumer's cwd has a `tsconfig.json` at its root. */

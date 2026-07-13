@@ -285,6 +285,59 @@ describe('vue rules do not fire on non-vue files', () => {
   })
 })
 
+describe('framework detection scans workspace sub-packages, not just the root', () => {
+  /*
+   * The fixture is a pnpm workspace whose root package.json declares no framework; `vue` and
+   * `nuxt` live in `packages/web`. Detecting them across the workspace is what lets a plain
+   * `maninak()` lint `.vue` files without the consumer passing `vue: true` or a `max-len`
+   * override, which was the recurring per-repo workaround.
+   */
+  async function lintMonorepoVue(): Promise<Awaited<ReturnType<typeof lint>>> {
+    return await callAtDir(
+      'test/fixtures/monorepo-vue',
+      async () => await lint('packages/web/Component.vue'),
+    )
+  }
+
+  it('enables Vue rules when vue is declared only in a sub-package', async () => {
+    const results = await lintMonorepoVue()
+
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'vue/define-props-declaration' }),
+    )
+  })
+
+  it('turns max-len off for .vue so a long unwrappable template line is not flagged', async () => {
+    // Without workspace detection the maninak Vue blocks (which hand formatting to
+    // prettier-vue and thus disable max-len) never activate here, so the long <p title="...">
+    // line would be reported. This proves the whole Vue block, not just antfu's parser, is on.
+    const results = await lintMonorepoVue()
+    const maxLen = results.filter((finding) => finding.ruleId === 'max-len')
+
+    expect(maxLen).toEqual([])
+  })
+
+  it('disables vue/no-undef-components when nuxt is present in the workspace', async () => {
+    const results = await lintMonorepoVue()
+    const undef = results.filter((finding) => finding.ruleId === 'vue/no-undef-components')
+
+    expect(undef).toEqual([])
+  })
+
+  it('keeps vue/no-undef-components ON for a plain (non-nuxt) Vue project', async () => {
+    // The paired assertion that makes the nuxt-off case above non-vacuous: the identical
+    // undefined-component construct MUST still report in a Vue project without nuxt.
+    const results = await callAtDir(
+      'test/fixtures/vue-project',
+      async () => await lint('UndefComponent.vue'),
+    )
+
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'vue/no-undef-components' }),
+    )
+  })
+})
+
 describe('jsdoc/require-jsdoc (opt-in via requireJsdocInUtils)', () => {
   const jsdocOpts = { requireJsdocInUtils: true }
 

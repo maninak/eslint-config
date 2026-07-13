@@ -1,0 +1,9 @@
+{
+  "name": "monorepo-vue-root",
+  "version": "0.0.0",
+  "private": true,
+  "devDependencies": {
+    "eslint": "^9.10.0",
+    "typescript": "^5.4.0"
+  }
+}
