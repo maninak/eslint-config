@@ -196,6 +196,43 @@ describe('ts/consistent-type-imports inlines the type specifier when autofixed',
   })
 })
 
+describe('maninak/prefer-concise-async-arrow', () => {
+  /*
+   * Prettier always expands `async () => { await expr }` to multiline. The concise form
+   * `async () => await expr` is semantically equivalent and prettier leaves it alone.
+   * The rule auto-fixes in the right direction so prettier/prettier stops firing.
+   */
+
+  it('fires on a single-await block body (at warn severity)', async () => {
+    const results = await lint('test/fixtures/inline-callback.ts')
+
+    expect(results).toContainEqual(
+      expect.objectContaining({
+        ruleId: 'maninak/prefer-concise-async-arrow',
+        severity: 1,
+      }),
+    )
+  })
+
+  it('does NOT fire when the block body has more than one statement', async () => {
+    const results = await lint('test/fixtures/inline-callback.ts')
+    // The multi-statement block starts at line 6 in the fixture.
+    const multiStatementLines = results.filter(
+      (finding) =>
+        finding.ruleId === 'maninak/prefer-concise-async-arrow' && finding.line >= 6,
+    )
+
+    expect(multiStatementLines).toHaveLength(0)
+  })
+
+  it('auto-fixes to the concise form prettier accepts without rewriting', async () => {
+    const fixed = await lintAndFix('test/fixtures/inline-callback.ts')
+
+    expect(fixed).toContain('async () => await initGitRepo()')
+    expect(fixed).not.toContain('{ await initGitRepo() }')
+  })
+})
+
 describe('vue rules fire on .vue files when vue is a consumer dep', () => {
   async function lintVue(): Promise<Awaited<ReturnType<typeof lint>>> {
     return await callAtDir(
@@ -301,6 +338,78 @@ describe('jsdoc/require-jsdoc (opt-in via requireJsdocInUtils)', () => {
   })
 })
 
+describe('maninak/jsdoc-oneline', () => {
+  const fixturePath = 'test/fixtures/jsdoc-oneline.ts'
+  const ruleId = 'maninak/jsdoc-oneline'
+  const expected = '/** Copies the sandbox identity into `altNodeHomePath`. */'
+
+  function getCaseArea(caseName: string): { start: number; end: number } {
+    const lines = readFileSync(fixturePath, 'utf-8').split('\n')
+    const startIdx = lines.findIndex((ln) => ln.includes(`@case ${caseName}`))
+
+    if (startIdx === -1) {
+      throw new Error(`Case not found: ${caseName}`)
+    }
+
+    const endIdx = lines.findIndex((ln, idx) => idx > startIdx && ln.includes('@case'))
+    const start = startIdx + 2
+    const end = endIdx === -1 ? lines.length : endIdx + 1
+
+    return { start, end }
+  }
+
+  function caseHasViolation(
+    results: Awaited<ReturnType<typeof lint>>,
+    caseName: string,
+  ): boolean {
+    const { start, end } = getCaseArea(caseName)
+
+    return results.some(
+      (result) => result.ruleId === ruleId && result.line >= start && result.line <= end,
+    )
+  }
+
+  const malformed = [
+    'multiline-clean',
+    'multiline-extra-spaces',
+    'dangling-close',
+    'no-inner-spaces',
+    'double-leading-space',
+    'missing-trailing-space',
+  ]
+
+  for (const caseName of malformed) {
+    it(`flags the ${caseName} block`, async () => {
+      const results = await lint(fixturePath)
+
+      expect(caseHasViolation(results, caseName)).toBe(true)
+    })
+  }
+
+  it('leaves a tag-bearing block untouched', async () => {
+    const results = await lint(fixturePath)
+
+    expect(caseHasViolation(results, 'keep-tagged')).toBe(false)
+  })
+
+  it('leaves a multi-paragraph block untouched', async () => {
+    const results = await lint(fixturePath)
+
+    expect(caseHasViolation(results, 'keep-multiparagraph')).toBe(false)
+  })
+
+  it('auto-fix collapses every malformed variant to the same one-line form', async () => {
+    const fixed = await lintAndFix(fixturePath)
+    const occurrences = fixed.split('\n').filter((line) => line.trim() === expected)
+
+    // All six malformed cases must collapse to the identical single-line comment.
+    expect(occurrences).toHaveLength(6)
+    // The tag-bearing and multi-paragraph blocks must remain multiline (still contain ` * `).
+    expect(fixed).toContain('* @param x the input value')
+    expect(fixed).toContain('* Second paragraph of the description.')
+  })
+})
+
 describe('padding-line-between-statements', async () => {
   const paddingFixturePath = 'test/fixtures/padding-line.ts'
   const rule = 'padding-line-between-statements'
@@ -325,21 +434,8 @@ describe('padding-line-between-statements', async () => {
 
   function isLineInCase(line: number, caseName: string): boolean {
     const { start, end } = getCaseArea(paddingFixturePath, caseName)
-
     return line >= start && line <= end
   }
-
-  // ── always(*, return) ──────────────────────────────────────────────────────
-
-  it('flags a missing blank line before return', () => {
-    expect(results.some((result) => isLineInCase(result.line, 'always-return-fire'))).toBe(
-      true,
-    )
-  })
-
-  it('accepts a blank line before return', () => {
-    expect(results.some((result) => isLineInCase(result.line, 'always-return-ok'))).toBe(false)
-  })
 
   // ── always(directive, *) ───────────────────────────────────────────────────
 
@@ -461,8 +557,88 @@ describe('padding-line-between-statements', async () => {
 
   // ── regression guard ─────────────────────────────────────────────────────
 
-  it('fires exactly 7 padding violations in the fixture (regression guard)', () => {
-    expect(results).toHaveLength(7)
+  it('fires exactly 6 padding violations in the fixture (regression guard)', () => {
+    expect(results).toHaveLength(6)
+  })
+})
+
+describe('maninak/compact-return', () => {
+  const fixturePath = 'test/fixtures/compact-return.ts'
+  const ruleId = 'maninak/compact-return'
+
+  function getCaseArea(caseName: string): { start: number; end: number } {
+    const lines = readFileSync(fixturePath, 'utf-8').split('\n')
+    const startIdx = lines.findIndex((ln) => ln.includes(`@case ${caseName}`))
+
+    if (startIdx === -1) {
+      throw new Error(`Case not found: ${caseName}`)
+    }
+
+    const endIdx = lines.findIndex((ln, idx) => idx > startIdx && ln.includes('@case'))
+    const start = startIdx + 2
+    const end = endIdx === -1 ? lines.length : endIdx + 1
+
+    return { start, end }
+  }
+
+  function caseHasViolation(
+    results: Awaited<ReturnType<typeof lint>>,
+    caseName: string,
+  ): boolean {
+    const { start, end } = getCaseArea(caseName)
+
+    return results.some(
+      (result) => result.ruleId === ruleId && result.line >= start && result.line <= end,
+    )
+  }
+
+  it('flags a blank line before return in a two-statement body', async () => {
+    const results = await lint(fixturePath)
+
+    expect(caseHasViolation(results, 'compact-blank-fire')).toBe(true)
+  })
+
+  it('accepts an already-compact two-statement body', async () => {
+    const results = await lint(fixturePath)
+
+    expect(caseHasViolation(results, 'compact-no-blank-ok')).toBe(false)
+  })
+
+  it('accepts a blank line before return in a three-statement body', async () => {
+    const results = await lint(fixturePath)
+
+    expect(caseHasViolation(results, 'noncompact-blank-ok')).toBe(false)
+  })
+
+  it('requires a blank line before return in a three-statement body without one', async () => {
+    const results = await lint(fixturePath)
+
+    expect(caseHasViolation(results, 'noncompact-no-blank-fire')).toBe(true)
+  })
+
+  it('treats a two-statement body as non-compact when the first statement is multiline', async () => {
+    const results = await lint(fixturePath)
+
+    expect(caseHasViolation(results, 'compact-multiline-prev-ok')).toBe(false)
+  })
+
+  it('ignores a return that is the first statement in its block', async () => {
+    const results = await lint(fixturePath)
+
+    expect(caseHasViolation(results, 'return-first-ok')).toBe(false)
+  })
+
+  it('does NOT flag a single-return switch case (the old always(*, return) footgun)', async () => {
+    const results = await lint(fixturePath)
+
+    expect(caseHasViolation(results, 'switch-case-return-ok')).toBe(false)
+  })
+
+  it('auto-fix collapses the compact blank and reaches a fixed point', async () => {
+    const fixed = await lintAndFix(fixturePath)
+
+    expect(fixed).toMatch(/const _doubled = _x \* 2\n {2}return _doubled/)
+    expect(fixed).toMatch(/const _tripled = _x \* 3\n\n {2}return _doubled \+ _tripled/)
   })
 })
 

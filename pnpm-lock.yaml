@@ -51,6 +51,9 @@ importers:
       '@types/eslint':
         specifier: ^9.0.0
         version: 9.6.1
+      '@types/estree':
+        specifier: ^1.0.0
+        version: 1.0.9
       '@types/node':
         specifier: ^25.0.0
         version: 25.9.2

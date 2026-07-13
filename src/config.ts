@@ -23,6 +23,9 @@ import pluginPrettier from 'eslint-plugin-prettier'
 import pluginPrettierVue from 'eslint-plugin-prettier-vue'
 import pluginTailwindcss from 'eslint-plugin-tailwindcss'
 import pluginVueScopedCss from 'eslint-plugin-vue-scoped-css'
+import compactReturn from './rules/compact-return.js'
+import jsdocOneline from './rules/jsdoc-oneline.js'
+import preferConciseAsyncArrow from './rules/prefer-concise-async-arrow.js'
 import { getConsumerVueVersion, isInConsumerDeps } from './utils.js'
 
 const prettier = interopDefault(pluginPrettier)
@@ -194,6 +197,15 @@ export default function buildConfig() {
         // antfu with `stylistic: false` does not register the @stylistic plugin, but
         // we still need it for `style/member-delimiter-style` further below.
         style: interopDefault(pluginStylistic),
+        // A single registration for every custom maninak rule. Separate `maninak` plugin
+        // objects under one key conflict in flat config, so all custom rules live here.
+        maninak: {
+          rules: {
+            'prefer-concise-async-arrow': preferConciseAsyncArrow,
+            'compact-return': compactReturn,
+            'jsdoc-oneline': jsdocOneline,
+          },
+        },
       },
       rules: {
         /*
@@ -232,9 +244,13 @@ export default function buildConfig() {
         // maninak additions follow
         'no-confusing-arrow': ['warn', { allowParens: true }],
         'no-extra-boolean-cast': 'warn',
+        // Blank-line-before-return is owned by `maninak/compact-return` (declared below), not
+        // by padding-line. The custom rule requires a blank before return in normal bodies AND
+        // forbids one in compact two-statement bodies. Keeping that policy in padding-line too
+        // would make the two fixers fight over the compact case and never converge.
+        'maninak/compact-return': 'warn',
         'padding-line-between-statements': [
           'warn',
-          { blankLine: 'always', prev: '*', next: 'return' },
           { blankLine: 'always', prev: 'directive', next: '*' },
           { blankLine: 'always', prev: '*', next: 'multiline-block-like' },
           // Relax for co-located early return ifs
@@ -290,6 +306,9 @@ export default function buildConfig() {
         'prefer-spread': 'warn',
         'prefer-template': 'warn',
         'template-curly-spacing': 'warn',
+        // Flag `async () => { await expr }` and auto-fix to `async () => await expr`. Prettier
+        // always expands block bodies to multiline; the concise form stays on one line.
+        'maninak/prefer-concise-async-arrow': 'warn',
         'arrow-parens': ['warn', 'always', { requireForBlockBody: true }],
         'spaced-comment': [
           'warn',
@@ -356,6 +375,11 @@ export default function buildConfig() {
          * Rules from `eslint-plugin-antfu` follow
          * ====================================================================================
          */
+        // Collapse a description-only JSDoc block to a single line `/** text */` when it fits
+        // the print width, normalizing interior spacing. The official jsdoc plugin's
+        // `multiline-blocks` leaves single-line blocks with stray interior spaces intact, so
+        // this owns the whole normalization to guarantee every variant converges identically.
+        'maninak/jsdoc-oneline': ['warn', { maxColumns: maxColumnsPerLine }],
         'antfu/if-newline': 'warn',
         'antfu/import-dedupe': 'warn',
         'antfu/top-level-function': 'warn',

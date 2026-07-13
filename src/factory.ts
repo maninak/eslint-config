@@ -8,9 +8,7 @@ import { merge } from 'ts-deepmerge'
 import buildConfig, { requireJsdocInUtilsBlocks } from './config.js'
 import { hasConsumerTsconfig, isInConsumerDeps } from './utils.js'
 
-/**
- * Maninak-specific options layered on top of antfu's. All optional.
- */
+/** Maninak-specific options layered on top of antfu's. All optional. */
 export interface ManinakExtraOptions {
   /**
    * When true, require a JSDoc block on `export`ed functions, classes, and methods in folders
@@ -146,7 +144,6 @@ function resolveTsconfigPaths(
 
   if (Array.isArray(explicit)) {
     const paths = explicit.filter((item): item is string => item.length > 0)
-
     return paths.length > 0 ? paths : undefined
   }
   if (typeof explicit === 'string' && explicit.length > 0) {

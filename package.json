@@ -70,6 +70,7 @@
   },
   "devDependencies": {
     "@types/eslint": "^9.0.0",
+    "@types/estree": "^1.0.0",
     "@types/node": "^25.0.0",
     "eslint-define-config": "link:@@antfu/eslint-define-config",
     "publint": "^0.3.0",

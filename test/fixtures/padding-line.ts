@@ -5,19 +5,6 @@
 // Violations are intentional. The "fire" cases have NO blank line where one
 // is required; the "ok" cases have a blank line (or use a relaxed combo).
 
-// @case always-return-fire
-function _missingBlankBeforeReturn(_x: number) {
-  const _doubled = _x * 2
-  return _doubled
-}
-
-// @case always-return-ok
-function _returnWithBlank(_x: number) {
-  const _doubled = _x * 2
-
-  return _doubled
-}
-
 // @case always-directive-fire
 function _directiveFire() {
   'use strict'
