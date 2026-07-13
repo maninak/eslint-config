@@ -391,6 +391,22 @@ describe('framework detection scans workspace sub-packages, not just the root', 
       expect.objectContaining({ ruleId: 'vue/no-undef-components' }),
     )
   })
+
+  it('exempts a nested Nuxt convention file (pages/) from vue/multi-word-component-names', async () => {
+    // Nuxt dictates single-word names for pages/layouts/error/app files, so its config turns
+    // vue/multi-word-component-names off for them. Those globs are root-anchored, so a Nuxt
+    // app in a sub-package (packages/web here) needs the globs broadened to match. Without
+    // that, `pages/index.vue` gets flagged with a name it cannot legally change (taiga-grove).
+    const results = await callAtDir(
+      'test/fixtures/monorepo-vue',
+      async () => await lint('packages/web/pages/index.vue'),
+    )
+    const flagged = results.filter(
+      (finding) => finding.ruleId === 'vue/multi-word-component-names',
+    )
+
+    expect(flagged).toEqual([])
+  })
 })
 
 describe('jsdoc/require-jsdoc (opt-in via requireJsdocInUtils)', () => {
