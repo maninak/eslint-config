@@ -3,6 +3,16 @@
   "type": "module",
   "version": "0.2.5",
   "description": "A batteries-included lint-and-format suite for maximum DX and minimum friction. Supports JS, TS, Vue, JSX, and more.",
+  "funding": [
+    {
+      "type": "liberapay",
+      "url": "https://liberapay.com/maninak/donate"
+    },
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/maninak"
+    }
+  ],
   "author": "Kostis Maninakis <maninak@protonmail.com> (https://maninak.github.io)",
   "license": "MIT",
   "homepage": "https://github.com/maninak/eslint-config#README.md",
