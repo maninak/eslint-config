@@ -47,7 +47,7 @@
     "prepare": "node scripts/ensure-pnpm.mjs && node scripts/install-hooks.mjs",
     "build": "tsup src/index.ts --format esm,cjs --sourcemap --clean",
     "postbuild": "tsc -p tsconfig.build.json --emitDeclarationOnly && cp ./dist/index.d.ts ./dist/index.d.cts",
-    "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-location node_modules/.cache/eslint",
+    "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-strategy content --cache-location node_modules/.cache/eslint --concurrency=auto",
     "test": "npm run test:unit && npm run test:typings",
     "test:typings": "tsc -p tsconfig.typecheck.json --noEmit",
     "test:unit": "vitest run",
@@ -93,7 +93,7 @@
     "pre-commit": "npx lint-staged"
   },
   "lint-staged": {
-    "*": "eslint --fix --max-warnings 0 --no-warn-ignored --cache --cache-location node_modules/.cache/eslint"
+    "*": "eslint --fix --max-warnings 0 --no-warn-ignored --cache --cache-strategy content --cache-location node_modules/.cache/eslint"
   },
   "publishConfig": {
     "access": "public"

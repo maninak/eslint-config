@@ -64,7 +64,7 @@ Add the following to your `package.json` for local and CI invocation:
 ```json
 {
   "scripts": {
-    "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-strategy content --cache-location node_modules/.cache/eslint"
+    "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-strategy content --cache-location node_modules/.cache/eslint --concurrency=auto"
   }
 }
 ```
