@@ -557,6 +557,125 @@ describe('maninak/jsdoc-oneline', () => {
   })
 })
 
+describe('maninak/jsdoc-max-len', () => {
+  const fixturePath = 'test/fixtures/jsdoc-max-len.ts'
+  const ruleId = 'maninak/jsdoc-max-len'
+  const a50 = 'a'.repeat(50)
+  const b50 = 'b'.repeat(50)
+
+  function getCaseArea(caseName: string): { start: number; end: number } {
+    const lines = readFileSync(fixturePath, 'utf-8').split('\n')
+    const startIdx = lines.findIndex((ln) => ln.includes(`@case ${caseName}`))
+
+    if (startIdx === -1) {
+      throw new Error(`Case not found: ${caseName}`)
+    }
+
+    const endIdx = lines.findIndex((ln, idx) => idx > startIdx && ln.includes('@case'))
+    const start = startIdx + 2
+    const end = endIdx === -1 ? lines.length : endIdx + 1
+
+    return { start, end }
+  }
+
+  function caseHasViolation(
+    results: Awaited<ReturnType<typeof lint>>,
+    caseName: string,
+  ): boolean {
+    const { start, end } = getCaseArea(caseName)
+
+    return results.some(
+      (result) => result.ruleId === ruleId && result.line >= start && result.line <= end,
+    )
+  }
+
+  const fireCases = ['wrap-oneline-fire', 'wrap-param-fire', 'wrap-prose-fire']
+
+  for (const caseName of fireCases) {
+    it(`flags the overflowing ${caseName} block`, async () => {
+      const results = await lint(fixturePath)
+
+      expect(caseHasViolation(results, caseName)).toBe(true)
+    })
+  }
+
+  const keepCases = [
+    'short-ok',
+    'keep-fence-ok',
+    'keep-example-ok',
+    'keep-inline-tag-ok',
+    'keep-table-ok',
+    'keep-url-ok',
+    'keep-trailing-ok',
+    'keep-inline-closer-ok',
+  ]
+
+  for (const caseName of keepCases) {
+    it(`leaves the ${caseName} block untouched`, async () => {
+      const results = await lint(fixturePath)
+
+      expect(caseHasViolation(results, caseName)).toBe(false)
+    })
+  }
+
+  it('auto-fix rewrites a too-long one-line block as an exact multiline block', async () => {
+    const fixed = await lintAndFix(fixturePath)
+
+    expect(fixed).toContain(`/**\n * ${a50}\n * ${b50}\n */`)
+  })
+
+  it('auto-fix wraps a long @param line, keeping the tag on the first line', async () => {
+    const fixed = await lintAndFix(fixturePath)
+
+    expect(fixed).toContain(` * @param foo ${a50}\n * ${b50} more`)
+  })
+
+  it('auto-fix wraps a long prose line so the opening words now fit the limit', async () => {
+    const fixed = await lintAndFix(fixturePath)
+    const proseLine = fixed
+      .split('\n')
+      .find((line) => line.includes('This description line is deliberately written'))
+
+    // The original prose line is 123 columns. After wrapping, the line carrying its opening
+    // words must fit the limit (proving the wrap happened; word preservation is locked by the
+    // exact one-line and @param assertions above).
+    expect(proseLine !== undefined && proseLine.length <= 95).toBe(true)
+  })
+
+  it('keeps the deliberately-skipped long lines byte-for-byte', async () => {
+    const fixed = await lintAndFix(fixturePath)
+
+    expect(fixed).toContain(
+      'const veryLongVariableName = someFunction(withArgs, thatPush, thisCodeLine, wellPastNinetyFive)',
+    )
+
+    expect(fixed).toContain(
+      'See {@link SomeVeryLongReferenceIdentifier} for the complete explanation of how this behaves ok.',
+    )
+
+    expect(fixed).toContain(
+      'https://example.com/some/really/long/path/segment/that/has/no/spaces/and/cannot/be/wrapped/at/all',
+    )
+    // The trailing block comment is not converted to multiline (code precedes it on the line).
+    expect(fixed).toContain('export const _trailing = 1 /**')
+  })
+
+  it('reaches a fixed point (a second fix pass changes nothing)', async () => {
+    const fixed = await lintAndFix(fixturePath)
+    const { writeFileSync, rmSync } = await import('node:fs')
+    const settledPath = 'test/fixtures/jsdoc-max-len-settled.ts'
+    writeFileSync(settledPath, fixed)
+
+    try {
+      const refixed = await lintAndFix(settledPath)
+
+      expect(refixed).toBe(fixed)
+    } finally {
+      rmSync(settledPath, { force: true })
+    }
+  })
+})
+
 describe('padding-line-between-statements', async () => {
   const paddingFixturePath = 'test/fixtures/padding-line.ts'
   const rule = 'padding-line-between-statements'

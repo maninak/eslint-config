@@ -128,7 +128,8 @@ export async function maninak(
  * type-aware linting should stay off.
  *
  * Resolution order:
- * 1. If the consumer set `typescript: false`, return undefined (TS is being disabled outright).
+ * 1. If the consumer set `typescript: false`, return undefined (TS is being disabled
+ * outright).
  * 2. If the consumer set `typescript.tsconfigPath` (string or string[]), use that.
  * 3. Otherwise auto-detect: a `tsconfig.json` at cwd plus `typescript` in the consumer's
  *    deps activates type-aware linting silently.

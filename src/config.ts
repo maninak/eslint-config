@@ -24,6 +24,7 @@ import pluginPrettierVue from 'eslint-plugin-prettier-vue'
 import pluginTailwindcss from 'eslint-plugin-tailwindcss'
 import pluginVueScopedCss from 'eslint-plugin-vue-scoped-css'
 import compactReturn from './rules/compact-return.js'
+import jsdocMaxLen from './rules/jsdoc-max-len.js'
 import jsdocOneline from './rules/jsdoc-oneline.js'
 import preferConciseAsyncArrow from './rules/prefer-concise-async-arrow.js'
 import { getConsumerVueVersion, isInConsumerDeps } from './utils.js'
@@ -204,6 +205,7 @@ export default function buildConfig() {
             'prefer-concise-async-arrow': preferConciseAsyncArrow,
             'compact-return': compactReturn,
             'jsdoc-oneline': jsdocOneline,
+            'jsdoc-max-len': jsdocMaxLen,
           },
         },
       },
@@ -380,6 +382,11 @@ export default function buildConfig() {
         // `multiline-blocks` leaves single-line blocks with stray interior spaces intact, so
         // this owns the whole normalization to guarantee every variant converges identically.
         'maninak/jsdoc-oneline': ['warn', { maxColumns: maxColumnsPerLine }],
+        // Wrap any JSDoc line past the print width onto continuation lines. `max-len` sets
+        // `ignoreComments: true`, so comments get no width enforcement otherwise; this fills
+        // that gap with a fixer. Split-only (never joins), so it cannot loop against
+        // `jsdoc-oneline` above, which only collapses blocks already within the width.
+        'maninak/jsdoc-max-len': ['warn', { maxColumns: maxColumnsPerLine }],
         'antfu/if-newline': 'warn',
         'antfu/import-dedupe': 'warn',
         'antfu/top-level-function': 'warn',
