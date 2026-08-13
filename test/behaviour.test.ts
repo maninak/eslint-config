@@ -1143,4 +1143,26 @@ describe('TOML files lint without prettier parse failures', () => {
     expect(parseFailures).toEqual([])
     expect(prettierFindings).toEqual([])
   })
+
+  /*
+   * `spaced-comment` reads a TOML `#` comment as an unbalanced JS block comment and demands a
+   * space before its terminator. taiga-grove's only recourse was ignoring `rust/**\/*.toml`
+   * outright, which also lost it any real TOML linting.
+   */
+  it('does not report JS comment rules on a TOML `#` comment', async () => {
+    const results = await lint('test/fixtures/manifest.toml')
+    const jsCommentRules = results.filter((result) =>
+      ['spaced-comment', 'maninak/jsdoc-max-len', 'maninak/jsdoc-oneline'].includes(
+        result.ruleId ?? '',
+      ),
+    )
+
+    expect(jsCommentRules).toEqual([])
+  })
+
+  it('still enforces spaced-comment on TypeScript, so the scoping is not a blanket off', async () => {
+    const results = await lint('test/fixtures/comment-spacing.ts')
+
+    expect(results).toContainEqual(expect.objectContaining({ ruleId: 'spaced-comment' }))
+  })
 })

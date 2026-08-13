@@ -10,6 +10,7 @@ import {
   GLOB_JSON5,
   GLOB_JSONC,
   GLOB_JSX,
+  GLOB_SRC,
   GLOB_SVELTE,
   GLOB_TESTS,
   GLOB_TOML,
@@ -194,6 +195,15 @@ export default function buildConfig() {
       },
     },
     {
+      /*
+       * Every rule below reads a JavaScript AST or JavaScript comment syntax, so the block is
+       * restricted to JS-family files. Left unrestricted it also reached the TOML, YAML, JSON
+       * and markdown files the base preset lints, where `spaced-comment` read a TOML `#` line
+       * as an unbalanced block comment and demanded a space before a block-comment terminator
+       * on every Cargo manifest. Markdown code fences keep these rules: they lint as virtual
+       * files whose names end in a real JS/TS extension.
+       */
+      files: [GLOB_SRC, GLOB_VUE, GLOB_SVELTE],
       plugins: {
         // antfu with `stylistic: false` does not register the @stylistic plugin, but
         // we still need it for `style/member-delimiter-style` further below.
