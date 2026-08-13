@@ -295,13 +295,37 @@ export default maninak({
 
 ### Optional: require JSDoc on shared utility code
 
-Off by default. Enabling it requires JSDoc on `export`ed declarations under conventional reusable-utility paths like `utils/`, `lib/`, etc. Opt in with:
+Off by default. `true` requires JSDoc on `export`ed declarations under conventional reusable-utility paths (`utils/`, `util/`, `lib/`, `helpers/`, and the same names as single files). A free-text description alone satisfies it; `@param` and `@returns` stay optional.
 
 ```ts
 export default maninak({
-  requireJsdocInUtils: true,
+  requireJsdoc: true,
 })
 ```
+
+Pass an object when your reusable API lives elsewhere, or to change how strict the rule is:
+
+```ts
+export default maninak({
+  requireJsdoc: {
+    files: ['src/domain/**/*.ts', 'packages/*/src/**/*.ts'],
+    severity: 'error',
+  },
+})
+```
+
+| Key           | Default                     | What it does                                                                                                                                                    |
+| ------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `files`       | the utility globs above     | Globs to enforce on, **replacing** the defaults                                                                                                                 |
+| `extraFiles`  | `[]`                        | Globs enforced **in addition** to whatever `files` resolves to                                                                                                  |
+| `publicOnly`  | `true`                      | Only `export`ed declarations need a block                                                                                                                       |
+| `require`     | the three declaration kinds | Per-node-kind toggles, merged over the default (`FunctionDeclaration`, `MethodDefinition`, `ClassDeclaration`, `ArrowFunctionExpression`, `FunctionExpression`) |
+| `description` | `true`                      | Also enforce `jsdoc/require-description`                                                                                                                        |
+| `severity`    | `'warn'`                    | Severity for both rules                                                                                                                                         |
+
+Test files (`*.test.*`, `*.spec.*`, `*.unit.*`, and anything under `test/`, `tests/`, `__tests__/`, `specs/`, `__specs__/`) are exempt whatever globs you pass.
+
+> _`requireJsdocInUtils: true` is the old spelling of `requireJsdoc: true`. It still works, and is ignored when `requireJsdoc` is also set._
 
 ### Optional: type-aware linting inside `.vue` files
 

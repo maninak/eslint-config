@@ -3,25 +3,34 @@ import type {
   OptionsTypescript,
   TypedFlatConfigItem,
 } from '@antfu/eslint-config'
+import type { RequireJsdocOptions } from './config.js'
 import path from 'node:path'
 import antfu, { GLOB_TS, GLOB_TSX, GLOB_VUE } from '@antfu/eslint-config'
 import { glob } from 'tinyglobby'
 import { merge } from 'ts-deepmerge'
-import buildConfig, { requireJsdocInUtilsBlocks } from './config.js'
+import buildConfig, { buildRequireJsdocBlocks } from './config.js'
 import { hasConsumerTsconfig, isInConsumerDeps } from './utils.js'
 
 /** Maninak-specific options layered on top of antfu's. All optional. */
 export interface ManinakExtraOptions {
   /**
-   * When true, require a JSDoc block on `export`ed functions, classes, and methods in folders
-   * that conventionally hold reusable utilities e.g. `utils/`, `lib/`, etc.
-   * `@param` and `@returns` tags stay optional; a free-text description alone is enough
-   * of a contract.
+   * Require a JSDoc block on `export`ed functions, classes, and methods. `@param` and
+   * `@returns` tags stay optional; a free-text description alone is enough of a contract.
    *
-   * Test files e.g. `*.test.*`, `*.spec.*`, are always exempt even when their path matches one
-   * of the utility globs.
+   * `true` enforces it in folders that conventionally hold reusable utilities (`utils/`,
+   * `util/`, `lib/`, `helpers/`, and the same names as single files). Pass an object to name
+   * your own globs or loosen the rule; see {@link RequireJsdocOptions}.
+   *
+   * Test files e.g. `*.test.*`, `*.spec.*`, anything under `test/`, are always exempt, even
+   * when they match a glob you passed yourself.
    *
    * Default: `false`. Off by default to keep the preset lower friction.
+   */
+  requireJsdoc?: boolean | RequireJsdocOptions
+
+  /**
+   * @deprecated Renamed to `requireJsdoc`, which also accepts an options object. Still
+   *   honoured, but ignored when `requireJsdoc` is set.
    */
   requireJsdocInUtils?: boolean
 
@@ -106,7 +115,17 @@ export type ManinakOptions = Omit<OptionsConfig, 'typescript'> &
  * @example <caption>Opt in to JSDoc requirements for utility code</caption>
  * ```ts
  * export default maninak({
- *   requireJsdocInUtils: true,
+ *   requireJsdoc: true,
+ * })
+ * ```
+ *
+ * @example <caption>Require JSDoc on your own directories, as errors</caption>
+ * ```ts
+ * export default maninak({
+ *   requireJsdoc: {
+ *     files: ['src/domain/**', 'src/services/**'],
+ *     severity: 'error',
+ *   },
  * })
  * ```
  */
@@ -114,7 +133,13 @@ export async function maninak(
   options: ManinakOptions = {},
   ...userConfigs: Parameters<typeof antfu>['1'][]
 ): Promise<TypedFlatConfigItem[]> {
-  const { requireJsdocInUtils = false, vueTypeAware = false, ...antfuOptions } = options
+  const {
+    requireJsdoc,
+    requireJsdocInUtils = false,
+    vueTypeAware = false,
+    ...antfuOptions
+  } = options
+  const jsdocBlocks = resolveRequireJsdocBlocks(requireJsdoc ?? requireJsdocInUtils)
   const [maninakOptions, ...maninakConfig] = buildConfig()
   const nuxtConfigs = isInConsumerDeps('nuxt') ? await getNuxtConfigs() : []
   const frameworkDefaults = {
@@ -156,7 +181,7 @@ export async function maninak(
   const configs = await antfu(
     merge(baseOptions, tsconfigOverride),
     ...maninakConfig,
-    ...(requireJsdocInUtils ? requireJsdocInUtilsBlocks : []),
+    ...jsdocBlocks,
     ...nuxtConfigs,
     ...userConfigs,
   )
@@ -174,6 +199,20 @@ export async function maninak(
   }
 
   return configs
+}
+
+/**
+ * Turns the `requireJsdoc` option into the flat-config blocks that enforce it, or into nothing
+ * when it is off.
+ */
+function resolveRequireJsdocBlocks(
+  option: boolean | RequireJsdocOptions,
+): TypedFlatConfigItem[] {
+  if (option === false) {
+    return []
+  }
+
+  return buildRequireJsdocBlocks(option === true ? {} : option)
 }
 
 /**

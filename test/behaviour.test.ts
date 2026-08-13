@@ -1,3 +1,4 @@
+import type { LintResult } from './helpers.js'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import maninak from '../src/index.js'
@@ -460,6 +461,141 @@ describe('jsdoc/require-jsdoc (opt-in via requireJsdocInUtils)', () => {
     const matching = results.filter((result) => result.ruleId === 'jsdoc/require-jsdoc')
 
     expect(matching).toEqual([])
+  })
+})
+
+describe('requireJsdoc accepts an options object', () => {
+  /*
+   * The boolean form only ever reached a hard-coded utils/lib/helpers glob set, so a consumer
+   * whose reusable API lives elsewhere had to hand-roll the whole flat-config block. These
+   * lock in the object form: custom globs, the union form, severity, and the test exemption
+   * that must survive a caller-supplied glob.
+   */
+  async function lintJsdocFixture(
+    file: string,
+    options: Parameters<typeof maninak>[0],
+  ): Promise<Awaited<ReturnType<typeof lint>>> {
+    return await callAtDir(
+      'test/fixtures/jsdoc-project',
+      async () => await lint(file, options),
+    )
+  }
+
+  function requireJsdocOf(results: Awaited<ReturnType<typeof lint>>): LintResult[] {
+    return results.filter((finding) => finding.ruleId === 'jsdoc/require-jsdoc')
+  }
+
+  it('`true` still enforces the utility-code defaults', async () => {
+    const results = await lintJsdocFixture('src/utils/exports.ts', { requireJsdoc: true })
+
+    expect(requireJsdocOf(results)).toHaveLength(1)
+  })
+
+  it('`files` enforces on a directory the defaults never reach', async () => {
+    const results = await lintJsdocFixture('src/domain/service.ts', {
+      requireJsdoc: { files: ['src/domain/**/*.ts'] },
+    })
+
+    expect(requireJsdocOf(results)).toHaveLength(1)
+  })
+
+  it('`files` REPLACES the defaults, so utils/ stops being enforced', async () => {
+    const results = await lintJsdocFixture('src/utils/exports.ts', {
+      requireJsdoc: { files: ['src/domain/**/*.ts'] },
+    })
+
+    expect(requireJsdocOf(results)).toEqual([])
+  })
+
+  it('`extraFiles` enforces on the defaults AND the extra globs', async () => {
+    const options = { requireJsdoc: { extraFiles: ['src/domain/**/*.ts'] } }
+    const onUtils = await lintJsdocFixture('src/utils/exports.ts', options)
+    const onDomain = await lintJsdocFixture('src/domain/service.ts', options)
+
+    expect(requireJsdocOf(onUtils)).toHaveLength(1)
+    expect(requireJsdocOf(onDomain)).toHaveLength(1)
+  })
+
+  it("`severity: 'error'` reports at error severity", async () => {
+    const results = await lintJsdocFixture('src/utils/exports.ts', {
+      requireJsdoc: { severity: 'error' },
+    })
+
+    expect(requireJsdocOf(results)).toEqual([expect.objectContaining({ severity: 2 })])
+  })
+
+  it('defaults to warn severity', async () => {
+    const results = await lintJsdocFixture('src/utils/exports.ts', { requireJsdoc: true })
+
+    expect(requireJsdocOf(results)).toEqual([expect.objectContaining({ severity: 1 })])
+  })
+
+  it('`description: false` drops jsdoc/require-description', async () => {
+    const [enabled, dropped] = await callAtDir('test/fixtures/jsdoc-project', async () => {
+      return [
+        await resolveRule('src/utils/exports.ts', 'jsdoc/require-description', {
+          requireJsdoc: true,
+        }),
+        await resolveRule('src/utils/exports.ts', 'jsdoc/require-description', {
+          requireJsdoc: { description: false },
+        }),
+      ]
+    })
+
+    expect(enabled).toEqual(['warn'])
+    expect(dropped).toBeUndefined()
+  })
+
+  it('`require` merges over the defaults rather than replacing them', async () => {
+    const rule = await callAtDir(
+      'test/fixtures/jsdoc-project',
+      async () =>
+        await resolveRule('src/utils/exports.ts', 'jsdoc/require-jsdoc', {
+          requireJsdoc: { require: { ArrowFunctionExpression: true } },
+        }),
+    )
+
+    expect(rule).toMatchObject([
+      'warn',
+      {
+        publicOnly: true,
+        require: {
+          FunctionDeclaration: true,
+          MethodDefinition: true,
+          ClassDeclaration: true,
+          ArrowFunctionExpression: true,
+          FunctionExpression: false,
+        },
+      },
+    ])
+  })
+
+  it('exempts a test file even when the caller-supplied glob matches it', async () => {
+    const results = await lintJsdocFixture('src/domain/service.test.ts', {
+      requireJsdoc: { files: ['src/domain/**/*.ts'], severity: 'error' },
+    })
+    const jsdocFindings = results.filter(
+      (finding) => finding.ruleId?.startsWith('jsdoc/') ?? false,
+    )
+
+    expect(jsdocFindings).toEqual([])
+  })
+
+  it('honours the deprecated requireJsdocInUtils alias', async () => {
+    const results = await lintJsdocFixture('src/utils/exports.ts', {
+      requireJsdocInUtils: true,
+    })
+
+    expect(requireJsdocOf(results)).toHaveLength(1)
+  })
+
+  it('requireJsdoc wins over the deprecated alias', async () => {
+    const results = await lintJsdocFixture('src/utils/exports.ts', {
+      requireJsdoc: false,
+      requireJsdocInUtils: true,
+    })
+
+    expect(requireJsdocOf(results)).toEqual([])
   })
 })
 
