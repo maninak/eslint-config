@@ -48,6 +48,7 @@
     "build": "tsup src/index.ts --format esm,cjs --sourcemap --clean",
     "postbuild": "tsc -p tsconfig.build.json --emitDeclarationOnly && cp ./dist/index.d.ts ./dist/index.d.cts",
     "lint": "eslint . --max-warnings 0 --no-warn-ignored --cache --cache-strategy content --cache-location node_modules/.cache/eslint --concurrency=auto",
+    "pretest": "npm run build",
     "test": "npm run test:unit && npm run test:typings",
     "test:typings": "tsc -p tsconfig.typecheck.json --noEmit",
     "test:unit": "vitest run",
