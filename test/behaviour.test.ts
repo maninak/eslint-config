@@ -745,6 +745,31 @@ describe('filenameCase enforces a naming convention', () => {
   })
 })
 
+describe('markdown prose is soft-wrapped', () => {
+  /*
+   * Prettier defaults `proseWrap` to `preserve`, which enforces nothing: a hand-wrapped
+   * paragraph keeps whatever line breaks the author typed and drifts further out of shape
+   * with every edit. The preset sets `never`, so one paragraph, list item or table row is
+   * one source line and the reader's client decides the display width.
+   */
+  const fixturePath = 'test/fixtures/prose-wrap.md'
+
+  it('flags a hand-wrapped paragraph and a hand-wrapped list item', async () => {
+    const results = await lint(fixturePath)
+    const formatting = results.filter((finding) => finding.ruleId === 'prettier/prettier')
+
+    expect(formatting.map((finding) => finding.line)).toEqual([3, 7])
+  })
+
+  it('collapses each block onto a single line when fixed', async () => {
+    const fixed = await lintAndFix(fixturePath)
+    const paragraph = fixed.split('\n').find((line) => line.startsWith('This paragraph'))
+
+    expect(paragraph).toContain('collapses onto one line.')
+    expect(fixed).toMatch(/^- A list item .*other shape the setting governs\.$/m)
+  })
+})
+
 describe('maninak/jsdoc-oneline', () => {
   const fixturePath = 'test/fixtures/jsdoc-oneline.ts'
   const ruleId = 'maninak/jsdoc-oneline'

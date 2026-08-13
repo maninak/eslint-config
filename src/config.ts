@@ -49,6 +49,14 @@ const prettierConfig: PrettierConfig = {
   quoteProps: 'consistent',
   arrowParens: 'always',
   htmlWhitespaceSensitivity: 'css',
+  /*
+   * Markdown prose is soft-wrapped: one source line per paragraph, list item, blockquote or
+   * table row, however long. The reader's client wraps to the reader's width, and hard
+   * wrapping turns a three-word edit into a reflow of every line after it. Prettier's own
+   * default is `preserve`, which enforces nothing and lets a hand-wrapped paragraph drift
+   * out of shape with every edit.
+   */
+  proseWrap: 'never',
 }
 
 /**

@@ -4,10 +4,7 @@
 
 [![Sponsor maninak on Liberapay](https://img.shields.io/badge/Liberapay-Donate-F6C915?logo=liberapay&logoColor=black)](https://liberapay.com/maninak/donate)
 
-[![NPM downloads per week](https://img.shields.io/npm/dw/@maninak/eslint-config.svg)](https://npm-stat.com/charts.html?package=%40maninak%2Feslint-config)
-[![Repos depending on @maninak/eslint-config](https://badgen.net/github/dependents-repo/maninak/eslint-config?color=blue)](https://github.com/maninak/eslint-config/network/dependents)
-[![Github stars](https://badgen.net/github/stars/maninak/eslint-config)](https://github.com/maninak/eslint-config/stargazers)
-[![rad: - z22BzXnj6B9PmE6P5Gg67XCDURPzB](https://img.shields.io/static/v1?label=rad%3A&message=z22BzXnj6B9PmE6P5Gg67XCDURPzB&color=6666FF&logo=radicle&logoColor=FFFFFF&cacheSeconds=64800)](https://app.radicle.at/nodes/seed.radicle.at/rad:z22BzXnj6B9PmE6P5Gg67XCDURPzB)
+[![NPM downloads per week](https://img.shields.io/npm/dw/@maninak/eslint-config.svg)](https://npm-stat.com/charts.html?package=%40maninak%2Feslint-config) [![Repos depending on @maninak/eslint-config](https://badgen.net/github/dependents-repo/maninak/eslint-config?color=blue)](https://github.com/maninak/eslint-config/network/dependents) [![Github stars](https://badgen.net/github/stars/maninak/eslint-config)](https://github.com/maninak/eslint-config/stargazers) [![rad: - z22BzXnj6B9PmE6P5Gg67XCDURPzB](https://img.shields.io/static/v1?label=rad%3A&message=z22BzXnj6B9PmE6P5Gg67XCDURPzB&color=6666FF&logo=radicle&logoColor=FFFFFF&cacheSeconds=64800)](https://app.radicle.at/nodes/seed.radicle.at/rad:z22BzXnj6B9PmE6P5Gg67XCDURPzB)
 
 ## Features
 
@@ -71,11 +68,7 @@ Add the following to your `package.json` for local and CI invocation:
 
 > _To lint and auto-fix all files: `npm run lint -- --fix`._
 
-> _`--cache-strategy content` keys the cache on file **content** rather than the default
-> mtime+size. It costs a cheap hash per file but the cache then survives changes that do not
-> touch content: a `git checkout`, a branch switch, a fresh `git worktree`, or a
-> format-on-save no-op. Without it, any of those invalidates the whole cache and the next run
-> is a cold, full re-lint._
+> _`--cache-strategy content` keys the cache on file **content** rather than the default mtime+size. It costs a cheap hash per file but the cache then survives changes that do not touch content: a `git checkout`, a branch switch, a fresh `git worktree`, or a format-on-save no-op. Without it, any of those invalidates the whole cache and the next run is a cold, full re-lint._
 
 ### 4. VS Code Support
 
@@ -314,14 +307,14 @@ export default maninak({
 })
 ```
 
-| Key           | Default                     | What it does                                                                                                                                                    |
-| ------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `files`       | the utility globs above     | Globs to enforce on, **replacing** the defaults                                                                                                                 |
-| `extraFiles`  | `[]`                        | Globs enforced **in addition** to whatever `files` resolves to                                                                                                  |
-| `publicOnly`  | `true`                      | Only `export`ed declarations need a block                                                                                                                       |
-| `require`     | the three declaration kinds | Per-node-kind toggles, merged over the default (`FunctionDeclaration`, `MethodDefinition`, `ClassDeclaration`, `ArrowFunctionExpression`, `FunctionExpression`) |
-| `description` | `true`                      | Also enforce `jsdoc/require-description`                                                                                                                        |
-| `severity`    | `'warn'`                    | Severity for both rules                                                                                                                                         |
+| Key | Default | What it does |
+| --- | --- | --- |
+| `files` | the utility globs above | Globs to enforce on, **replacing** the defaults |
+| `extraFiles` | `[]` | Globs enforced **in addition** to whatever `files` resolves to |
+| `publicOnly` | `true` | Only `export`ed declarations need a block |
+| `require` | the three declaration kinds | Per-node-kind toggles, merged over the default (`FunctionDeclaration`, `MethodDefinition`, `ClassDeclaration`, `ArrowFunctionExpression`, `FunctionExpression`) |
+| `description` | `true` | Also enforce `jsdoc/require-description` |
+| `severity` | `'warn'` | Severity for both rules |
 
 Test files (`*.test.*`, `*.spec.*`, `*.unit.*`, and anything under `test/`, `tests/`, `__tests__/`, `specs/`, `__specs__/`) are exempt whatever globs you pass.
 
@@ -373,6 +366,18 @@ Requirements and limits, all worth knowing before you turn it on:
 - **Coverage is the `<script>` block, not the template.** `vue-eslint-parser` hands typescript-eslint the script program, so an unsafe value is reported where it is created rather than where a template interpolation dereferences it.
 - **It costs roughly 1.5x lint time on a Vue-heavy tree** (measured: 60 SFCs went from ~3.0s to ~4.4s, about 23ms extra per SFC). That cost is why it stays opt-in rather than becoming the default.
 - **Expect a wave of findings the first time.** These are pre-existing type holes that were never reported, not new ones.
+
+### Markdown prose is soft-wrapped
+
+Prettier runs with `proseWrap: "never"`, so one paragraph, list item, blockquote or table row is one source line however long it gets. The reader's client wraps to the reader's width, and a three-word edit stays a three-word diff instead of reflowing every line after it.
+
+Adopting this in an existing repo unwraps its markdown on the first `--fix`. Two consequences worth expecting: consecutive lines separated only by a newline (a stack of badges, for instance) join into one line, and a table whose widest row exceeds `printWidth` loses its column padding, since it cannot be aligned inside the line budget anyway.
+
+To keep hand-wrapped prose instead, put a `.prettierrc.json` at the repo root; it wins over the preset:
+
+```json
+{ "proseWrap": "preserve" }
+```
 
 ### Disable Prettier formatting enforcement
 
