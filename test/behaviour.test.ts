@@ -599,6 +599,152 @@ describe('requireJsdoc accepts an options object', () => {
   })
 })
 
+describe('filenameCase enforces a naming convention', () => {
+  /*
+   * The preset shipped no filename convention, so a consumer wanting camelCase modules and
+   * PascalCase components had to hand-roll two blocks AND carve out every Vue/Nuxt path whose
+   * filename is load-bearing. Getting that carve-out wrong flags `pages/`, `app.vue` and
+   * `[id].vue`, and "fixing" those breaks the app's routes.
+   */
+  const ruleId = 'unicorn/filename-case'
+
+  async function lintPlain(
+    file: string,
+    options: Parameters<typeof maninak>[0] = { filenameCase: true },
+  ): Promise<Awaited<ReturnType<typeof lint>>> {
+    return await callAtDir(
+      'test/fixtures/filename-case',
+      async () => await lint(file, options),
+    )
+  }
+
+  async function lintNuxt(
+    file: string,
+    options: Parameters<typeof maninak>[0] = { filenameCase: true },
+  ): Promise<Awaited<ReturnType<typeof lint>>> {
+    return await callAtDir(
+      'test/fixtures/filename-case-nuxt',
+      async () => await lint(file, options),
+    )
+  }
+
+  function caseFindings(results: Awaited<ReturnType<typeof lint>>): LintResult[] {
+    return results.filter((finding) => finding.ruleId === ruleId)
+  }
+
+  it('flags a kebab-case .ts file', async () => {
+    const results = await lintPlain('kebab-case.ts')
+
+    expect(caseFindings(results)).toEqual([expect.objectContaining({ ruleId, severity: 2 })])
+  })
+
+  it('accepts a camelCase .ts file', async () => {
+    const results = await lintPlain('camelCase.ts')
+
+    expect(caseFindings(results)).toEqual([])
+  })
+
+  it('accepts all-lowercase single words, so index.ts and noise.ts pass', async () => {
+    const onIndex = await lintPlain('index.ts')
+    const onNoise = await lintPlain('noise.ts')
+
+    expect(caseFindings(onIndex)).toEqual([])
+    expect(caseFindings(onNoise)).toEqual([])
+  })
+
+  it('judges a multi-dot name on its leading segment only', async () => {
+    const onCompliant = await lintPlain('foo.test.ts')
+    const onOffending = await lintPlain('pack-io.worker.ts')
+
+    expect(caseFindings(onCompliant)).toEqual([])
+    expect(caseFindings(onOffending)).toEqual([
+      expect.objectContaining({
+        ruleId,
+        message: expect.stringContaining('packIo.worker.ts') as unknown as string,
+      }),
+    ])
+  })
+
+  it('does NOT exempt pages/ when the consumer has no Vue or Nuxt dependency', async () => {
+    const results = await lintPlain('pages/route-name.ts')
+
+    expect(caseFindings(results)).toEqual([expect.objectContaining({ ruleId })])
+  })
+
+  it('does NOT fire by default (option off)', async () => {
+    const results = await lintPlain('kebab-case.ts', {})
+
+    expect(caseFindings(results)).toEqual([])
+  })
+
+  it('flags a kebab-case .vue component', async () => {
+    const results = await lintNuxt('kebab-case.vue')
+
+    expect(caseFindings(results)).toEqual([expect.objectContaining({ ruleId })])
+  })
+
+  it('accepts a PascalCase .vue component', async () => {
+    const results = await lintNuxt('PascalCase.vue')
+
+    expect(caseFindings(results)).toEqual([])
+  })
+
+  it.each([
+    'app.vue',
+    'error.vue',
+    'nuxt.config.ts',
+    'pages/foo-bar.vue',
+    'pages/[id].vue',
+    // Outside every carved-out directory, so this one is exempt purely by its brackets.
+    '[custom].vue',
+    'server/api/some-handler.ts',
+  ])('exempts the Nuxt convention path %s', async (file) => {
+    const results = await lintNuxt(file)
+
+    expect(caseFindings(results)).toEqual([])
+  })
+
+  it('still flags a non-convention file in a Nuxt project', async () => {
+    const results = await lintNuxt('kebab-case.ts')
+
+    expect(caseFindings(results)).toEqual([expect.objectContaining({ ruleId })])
+  })
+
+  it('`ts: false` disables the script block while .vue stays enforced', async () => {
+    const options = { filenameCase: { ts: false } } as const
+    const onScript = await lintNuxt('kebab-case.ts', options)
+    const onComponent = await lintNuxt('kebab-case.vue', options)
+
+    expect(caseFindings(onScript)).toEqual([])
+    expect(caseFindings(onComponent)).toEqual([expect.objectContaining({ ruleId })])
+  })
+
+  it('`vue: false` disables the component block while .ts stays enforced', async () => {
+    const options = { filenameCase: { vue: false } } as const
+    const onScript = await lintNuxt('kebab-case.ts', options)
+    const onComponent = await lintNuxt('kebab-case.vue', options)
+
+    expect(caseFindings(onScript)).toEqual([expect.objectContaining({ ruleId })])
+    expect(caseFindings(onComponent)).toEqual([])
+  })
+
+  it('honours a custom casing and severity', async () => {
+    const results = await lintPlain('camelCase.ts', {
+      filenameCase: { ts: 'kebabCase', severity: 'warn' },
+    })
+
+    expect(caseFindings(results)).toEqual([expect.objectContaining({ ruleId, severity: 1 })])
+  })
+
+  it('honours extra ignore globs', async () => {
+    const results = await lintPlain('kebab-case.ts', {
+      filenameCase: { ignore: ['**/kebab-case.ts'] },
+    })
+
+    expect(caseFindings(results)).toEqual([])
+  })
+})
+
 describe('maninak/jsdoc-oneline', () => {
   const fixturePath = 'test/fixtures/jsdoc-oneline.ts'
   const ruleId = 'maninak/jsdoc-oneline'

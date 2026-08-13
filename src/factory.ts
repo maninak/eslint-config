@@ -3,12 +3,12 @@ import type {
   OptionsTypescript,
   TypedFlatConfigItem,
 } from '@antfu/eslint-config'
-import type { RequireJsdocOptions } from './config.js'
+import type { FilenameCaseOptions, RequireJsdocOptions } from './config.js'
 import path from 'node:path'
 import antfu, { GLOB_TS, GLOB_TSX, GLOB_VUE } from '@antfu/eslint-config'
 import { glob } from 'tinyglobby'
 import { merge } from 'ts-deepmerge'
-import buildConfig, { buildRequireJsdocBlocks } from './config.js'
+import buildConfig, { buildFilenameCaseBlocks, buildRequireJsdocBlocks } from './config.js'
 import { hasConsumerTsconfig, isInConsumerDeps } from './utils.js'
 
 /** Maninak-specific options layered on top of antfu's. All optional. */
@@ -33,6 +33,23 @@ export interface ManinakExtraOptions {
    *   honoured, but ignored when `requireJsdoc` is set.
    */
   requireJsdocInUtils?: boolean
+
+  /**
+   * Enforce a filename casing convention: camelCase for `.ts`/`.js` modules, PascalCase for
+   * `.vue` components. Pass an object to change either casing or to exempt more paths; see
+   * {@link FilenameCaseOptions}.
+   *
+   * When `vue` or `nuxt` is a consumer dependency, paths whose filename is load-bearing under
+   * file-based routing are exempt automatically (`pages/`, `layouts/`, `middleware/`,
+   * `server/`, `app.vue`, `error.vue`, `*.config.*`, and dynamic segments like `[id].vue`),
+   * because renaming one of those changes a route or breaks the framework.
+   *
+   * The rule reports without fixing: renaming a file on disk would break every import of it.
+   *
+   * Default: `false`. Turning it on in an existing repo reports every file that disagrees at
+   * once, and each fix is a manual `git mv`.
+   */
+  filenameCase?: boolean | FilenameCaseOptions
 
   /**
    * When true, extend type-aware linting to `.vue` single-file components, so rules needing
@@ -119,6 +136,13 @@ export type ManinakOptions = Omit<OptionsConfig, 'typescript'> &
  * })
  * ```
  *
+ * @example <caption>Enforce filename casing</caption>
+ * ```ts
+ * export default maninak({
+ *   filenameCase: true,
+ * })
+ * ```
+ *
  * @example <caption>Require JSDoc on your own directories, as errors</caption>
  * ```ts
  * export default maninak({
@@ -134,12 +158,17 @@ export async function maninak(
   ...userConfigs: Parameters<typeof antfu>['1'][]
 ): Promise<TypedFlatConfigItem[]> {
   const {
+    filenameCase = false,
     requireJsdoc,
     requireJsdocInUtils = false,
     vueTypeAware = false,
     ...antfuOptions
   } = options
   const jsdocBlocks = resolveRequireJsdocBlocks(requireJsdoc ?? requireJsdocInUtils)
+  const filenameCaseBlocks =
+    filenameCase === false
+      ? []
+      : buildFilenameCaseBlocks(filenameCase === true ? {} : filenameCase)
   const [maninakOptions, ...maninakConfig] = buildConfig()
   const nuxtConfigs = isInConsumerDeps('nuxt') ? await getNuxtConfigs() : []
   const frameworkDefaults = {
@@ -182,6 +211,7 @@ export async function maninak(
     merge(baseOptions, tsconfigOverride),
     ...maninakConfig,
     ...jsdocBlocks,
+    ...filenameCaseBlocks,
     ...nuxtConfigs,
     ...userConfigs,
   )

@@ -327,6 +327,34 @@ Test files (`*.test.*`, `*.spec.*`, `*.unit.*`, and anything under `test/`, `tes
 
 > _`requireJsdocInUtils: true` is the old spelling of `requireJsdoc: true`. It still works, and is ignored when `requireJsdoc` is also set._
 
+### Optional: enforce filename casing
+
+Off by default. `true` requires camelCase for `.ts`, `.mts`, `.cts`, `.js`, `.mjs` and `.cjs` files, and PascalCase for `.vue` components.
+
+```ts
+export default maninak({
+  filenameCase: true,
+})
+```
+
+| Key        | Default        | What it does                                         |
+| ---------- | -------------- | ---------------------------------------------------- |
+| `ts`       | `'camelCase'`  | Casing for the JS/TS family, or `false` to skip them |
+| `vue`      | `'pascalCase'` | Casing for `.vue`, or `false` to skip them           |
+| `ignore`   | `[]`           | Extra globs exempt from the check                    |
+| `severity` | `'error'`      | Severity for both blocks                             |
+
+Casings are those of [`unicorn/filename-case`](https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/filename-case.md): `camelCase`, `kebabCase`, `pascalCase`, `snakeCase`.
+
+What it will not flag:
+
+- **An all-lowercase single word.** `index.ts`, `noise.ts` and `fs.ts` are already valid camelCase.
+- **The trailing segments of a multi-dot name.** `foo.test.ts` and `packIo.worker.ts` pass; only the leading segment is judged, so `pack-io.worker.ts` is reported as `packIo.worker.ts`.
+- **`.tsx` and `.jsx`.** One repo legitimately holds PascalCase components and camelCase hooks under the same extension, so no single casing is right for them.
+- **Vue and Nuxt convention paths**, when `vue` or `nuxt` is a dependency: `pages/`, `layouts/`, `middleware/`, `server/`, `app.vue`, `error.vue`, `*.config.*`, and any name with a dynamic segment such as `[id].vue`. Renaming one of those changes a route or stops the framework finding the file.
+
+The rule reports without fixing, since renaming a file on disk would break every import of it. Each fix is a `git mv` plus an import rewrite.
+
 ### Optional: type-aware linting inside `.vue` files
 
 Off by default. Without it, rules that need type information (`ts/no-unsafe-argument`, `ts/no-unsafe-assignment`, `ts/no-unsafe-call`, `ts/no-unsafe-member-access`, `ts/no-unsafe-return`, `ts/no-misused-promises`, `ts/restrict-template-expressions` and the rest) run on `.ts` and stop at the `.vue` boundary. Nothing errors and nothing warns, so a Vue or Nuxt project can believe those rules are enforced everywhere while the files holding most of its code are exempt. Opt in with:
