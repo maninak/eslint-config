@@ -50,8 +50,7 @@ export async function resolveRule(
 ): Promise<['off' | 'warn' | 'error', ...unknown[]] | undefined> {
   const eslint = await getEslint(options)
   const resolved = (await eslint.calculateConfigForFile(filePath)) as
-    | { rules?: Record<string, [number, ...unknown[]] | undefined> }
-    | undefined
+    { rules?: Record<string, [number, ...unknown[]] | undefined> } | undefined
   const raw = resolved?.rules?.[ruleName]
   if (!raw) {
     return undefined

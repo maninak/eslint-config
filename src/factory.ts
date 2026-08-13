@@ -302,8 +302,7 @@ function switchToLegacyProjectMode(
 ): void {
   for (const block of configs) {
     const parserOptions = block.languageOptions?.['parserOptions'] as
-      | { projectService?: unknown; project?: unknown }
-      | undefined
+      { projectService?: unknown; project?: unknown } | undefined
     if (parserOptions && 'projectService' in parserOptions) {
       delete parserOptions.projectService
       parserOptions.project = tsconfigPaths

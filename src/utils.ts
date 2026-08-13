@@ -29,8 +29,7 @@ function getWorkspaceGlobs(root: string, rootPkg: PackageJsonDeps | undefined): 
   if (existsSync(pnpmWorkspacePath)) {
     try {
       const parsed = parseYaml(readFileSync(pnpmWorkspacePath, 'utf8')) as
-        | { packages?: unknown }
-        | undefined
+        { packages?: unknown } | undefined
       if (Array.isArray(parsed?.packages)) {
         return parsed.packages.filter((glob): glob is string => typeof glob === 'string')
       }

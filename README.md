@@ -309,9 +309,7 @@ If you prefer to handle formatting outside ESLint:
 
 ```js
 export default maninak(
-  {
-    /* main options */
-  },
+  {},
   {
     rules: {
       'prettier/prettier': 'off',
