@@ -4,6 +4,8 @@
 import type antfu from '@antfu/eslint-config'
 import type { TypedFlatConfigItem } from '@antfu/eslint-config'
 import type { Config as PrettierConfig } from 'prettier'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
 import {
   GLOB_JS,
   GLOB_JSON,
@@ -14,15 +16,14 @@ import {
   GLOB_SVELTE,
   GLOB_TESTS,
   GLOB_TOML,
-  GLOB_TSX,
   GLOB_VUE,
 } from '@antfu/eslint-config'
 import pluginStylistic from '@stylistic/eslint-plugin'
 import configPrettier from 'eslint-config-prettier'
+import pluginBetterTailwind from 'eslint-plugin-better-tailwindcss'
 import pluginJasmine from 'eslint-plugin-jasmine'
 import pluginPrettier from 'eslint-plugin-prettier'
 import pluginPrettierVue from 'eslint-plugin-prettier-vue'
-import pluginTailwindcss from 'eslint-plugin-tailwindcss'
 import pluginVueScopedCss from 'eslint-plugin-vue-scoped-css'
 import compactReturn from './rules/compact-return.js'
 import jsdocMaxLen from './rules/jsdoc-max-len.js'
@@ -752,25 +753,158 @@ export default function buildConfig() {
           },
         ] satisfies TypedFlatConfigItem[])
       : []),
-    ...(isInConsumerDeps('tailwindcss')
-      ? ([
-          /*
-           * Rules for front-end component files (Vue, JSX, TSX)
-           * ==================================================================================
-           */
-          ...(interopDefault(pluginTailwindcss).configs[
-            'flat/recommended'
-          ] as TypedFlatConfigItem[]),
-          {
-            name: 'maninak/tailwindcss/overrides',
-            files: [GLOB_VUE, GLOB_JSX, GLOB_TSX, GLOB_SVELTE],
-            rules: {
-              'tailwindcss/no-custom-classname': 'off',
-            },
-          },
-        ] satisfies TypedFlatConfigItem[])
-      : []),
   ] satisfies [Parameters<typeof antfu>['0'], ...TypedFlatConfigItem[]]
+}
+
+/*
+ * Packages that mean the consumer writes Tailwind classes, even when `tailwindcss` itself is
+ * never declared: `@nuxt/ui` v4 depends on Tailwind v4 and ships nothing but Tailwind-classed
+ * components, and the two `@tailwindcss/*` build plugins are how a v4 project wires Tailwind
+ * into vite or postcss. taiga-grove declares only `@nuxt/ui`, which is exactly why it had no
+ * Tailwind linting at all: a bare `tailwindcss` check never saw it.
+ */
+const TAILWIND_CARRIERS = [
+  'tailwindcss',
+  '@tailwindcss/vite',
+  '@tailwindcss/postcss',
+  '@nuxt/ui',
+]
+
+/** Whether anything in the consumer's workspace implies Tailwind classes are being written. */
+export function isTailwindInConsumerDeps(): boolean {
+  return TAILWIND_CARRIERS.some((name) => isInConsumerDeps(name))
+}
+
+/**
+ * Walks up from `startDir` looking for an installed `tailwindcss`, mirroring the node_modules
+ * search the plugin itself does. Returns the package directory, or `undefined` if there is
+ * none the plugin could load.
+ *
+ * Declared deps are the wrong question here: pnpm leaves a transitively-installed Tailwind
+ * unlinked from any `node_modules` the consumer's cwd can see, so a project can depend on
+ * Tailwind through `@nuxt/ui` and still have nothing for the plugin to resolve.
+ */
+export function findTailwindInstall(startDir: string): string | undefined {
+  let dir = path.resolve(startDir)
+
+  while (true) {
+    const candidate = path.join(dir, 'node_modules', 'tailwindcss', 'package.json')
+    if (existsSync(candidate)) {
+      return path.dirname(candidate)
+    }
+    const parent = path.dirname(dir)
+    if (parent === dir) {
+      return undefined
+    }
+    dir = parent
+  }
+}
+
+/**
+ * Where the Tailwind rules should read your theme from. Give exactly one, whichever matches
+ * your Tailwind major.
+ *
+ * Neither has a default and nothing is guessed. The plugin reads your theme from this file,
+ * and given nothing it falls back to Tailwind's stock theme: it would then enforce a class
+ * order the project never configured and call every themed class unknown. A guessed path is
+ * worse than no linting, so there is nothing to guess with.
+ */
+export interface TailwindOptions {
+  /**
+   * Tailwind v4: path to the CSS entry point that pulls Tailwind in, relative to the
+   * consumer's cwd, e.g. `'apps/web/assets/css/main.css'` for a file starting
+   * `@import "tailwindcss"`.
+   */
+  entryPoint?: string
+
+  /**
+   * Tailwind v3: path to the `tailwind.config.js` that defines the theme, relative to the
+   * consumer's cwd. The plugin can also find this by itself, but a found-or-else-stock-theme
+   * search is exactly the silent wrong answer this option exists to rule out.
+   */
+  tailwindConfig?: string
+}
+
+/**
+ * Builds the Tailwind CSS blocks: the plugin's `recommended` set, plus the two rules this
+ * preset switches off.
+ *
+ * `enforce-consistent-line-wrapping` is off because it rewraps class strings across lines,
+ * which is formatting, and formatting here belongs to prettier; leaving both on puts two
+ * fixers on the same attribute. `no-unknown-classes` is off because a real project mixes
+ * Tailwind utilities with its own class names, and this preset has never demanded otherwise.
+ *
+ * @param options Where the project's Tailwind theme lives. See {@link TailwindOptions}.
+ */
+export function buildTailwindBlocks(options: TailwindOptions): TypedFlatConfigItem[] {
+  const { entryPoint, tailwindConfig } = options
+  if (!entryPoint && !tailwindConfig) {
+    throw new Error(
+      `[@maninak/eslint-config] tailwind needs to know where your theme lives: pass ` +
+        `"entryPoint" with your Tailwind v4 CSS entry point, or "tailwindConfig" with your ` +
+        `Tailwind v3 config path. Pass "tailwind: false" to switch the rules off instead.`,
+    )
+  }
+
+  /*
+   * Fail loudly on a bad path rather than letting the plugin quietly fall back to the stock
+   * theme. These are explicitly-passed options, so a path that does not resolve is a mistake
+   * in the consumer's config, and every rule below would otherwise report against the wrong
+   * theme without ever saying so.
+   */
+  const settings: Record<string, string> = {}
+  for (const [key, value] of Object.entries({ entryPoint, tailwindConfig })) {
+    if (value === undefined) {
+      continue
+    }
+    const absolute = path.resolve(process.cwd(), value)
+    if (!existsSync(absolute)) {
+      throw new Error(
+        `[@maninak/eslint-config] tailwind.${key} is "${value}", which does not exist ` +
+          `(resolved to "${absolute}"). Point it at the file that defines your Tailwind ` +
+          `theme, or pass "tailwind: false" to switch the Tailwind rules off.`,
+      )
+    }
+    settings[key] = absolute
+  }
+
+  if (!findTailwindInstall(process.cwd())) {
+    throw new Error(
+      `[@maninak/eslint-config] the Tailwind rules are on, but "tailwindcss" cannot be ` +
+        `resolved from "${process.cwd()}". The plugin reads your theme through the installed ` +
+        `Tailwind, and given none it disables every rule, so the linting you asked for would ` +
+        `silently not happen. Add "tailwindcss" to your devDependencies (a transitive copy ` +
+        `carried by @nuxt/ui and friends is not enough, pnpm keeps it unlinked), or pass ` +
+        `"tailwind: false" to switch the rules off.`,
+    )
+  }
+
+  const recommended = interopDefault(pluginBetterTailwind).configs
+    .recommended as TypedFlatConfigItem
+
+  /*
+   * The plugin's `recommended` set carries no `files`, so ESLint would apply it to every file
+   * the preset lints, TOML, JSON and YAML included. Those hold no class strings, and running
+   * seven rules over their ASTs is at best wasted work on every lint.
+   */
+  const files = [GLOB_SRC, GLOB_VUE, GLOB_SVELTE]
+
+  return [
+    {
+      ...recommended,
+      name: 'maninak/tailwindcss',
+      files,
+      settings: { 'better-tailwindcss': settings },
+    },
+    {
+      name: 'maninak/tailwindcss/overrides',
+      files,
+      rules: {
+        'better-tailwindcss/enforce-consistent-line-wrapping': 'off',
+        'better-tailwindcss/no-unknown-classes': 'off',
+      },
+    },
+  ]
 }
 
 // eslint-disable-next-line ts/no-explicit-any

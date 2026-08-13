@@ -53,3 +53,73 @@ describe('build artifact does not use FlatCompat (ESLint extension compatibility
     })
   }
 })
+
+/*
+ * Peer-declaration guards.
+ *
+ * These lock our `peerDependencies` to what the plugins we bundle actually demand of the
+ * consumer, so a plugin bump that widens or raises its own requirement cannot leave ours
+ * quietly wrong.
+ */
+describe('peer declarations match what the bundled plugins demand', () => {
+  const own = JSON.parse(readFileSync('package.json', 'utf-8')) as {
+    dependencies: Record<string, string>
+    peerDependencies: Record<string, string>
+    peerDependenciesMeta?: Record<string, { optional?: boolean }>
+  }
+
+  function readManifest(name: string): {
+    peerDependencies?: Record<string, string>
+  } {
+    return JSON.parse(readFileSync(`node_modules/${name}/package.json`, 'utf-8')) as {
+      peerDependencies?: Record<string, string>
+    }
+  }
+
+  /** The lowest version a range admits, e.g. `'^9.10.0 || ^10.0.0'` gives `[9, 10, 0]`. */
+  function readRangeFloor(range: string): number[] {
+    const versions = [...range.matchAll(/(\d+)\.(\d+)\.(\d+)/g)].map((match) =>
+      match.slice(1).map(Number),
+    )
+    versions.sort(
+      (left, right) => left[0]! - right[0]! || left[1]! - right[1]! || left[2]! - right[2]!,
+    )
+
+    return versions[0]!
+  }
+
+  it('asks for the same tailwindcss range the tailwind plugin does', () => {
+    const plugin = readManifest('eslint-plugin-better-tailwindcss')
+
+    expect(own.peerDependencies['tailwindcss']).toBe(plugin.peerDependencies?.['tailwindcss'])
+  })
+
+  /*
+   * Optional on purpose. A required peer would have npm install Tailwind into every consumer,
+   * including those that write no classes, and it would pick the newest version the range
+   * allows rather than the project's own: a v4 engine reading a v3 config is exactly the
+   * silent wrong answer the Tailwind rules refuse to give.
+   */
+  it('marks tailwindcss optional, so no consumer is made to install it', () => {
+    expect(own.peerDependenciesMeta?.['tailwindcss']?.optional).toBe(true)
+  })
+
+  it('asks for an eslint no older than every bundled plugin needs', () => {
+    const ourFloor = readRangeFloor(own.peerDependencies['eslint']!)
+
+    for (const dep of Object.keys(own.dependencies)) {
+      const required = readManifest(dep).peerDependencies?.['eslint']
+      if (!required) {
+        continue
+      }
+      const theirFloor = readRangeFloor(required)
+      const ourRank = ourFloor[0]! * 1e6 + ourFloor[1]! * 1e3 + ourFloor[2]!
+      const theirRank = theirFloor[0]! * 1e6 + theirFloor[1]! * 1e3 + theirFloor[2]!
+
+      expect(
+        ourRank,
+        `our eslint peer floor ${ourFloor.join('.')} is below what ${dep} needs (${required})`,
+      ).toBeGreaterThanOrEqual(theirRank)
+    }
+  })
+})

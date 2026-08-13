@@ -58,7 +58,7 @@ const workspaceDepsCache = new Map<string, PackageJsonDeps[]>()
  *
  * We read DECLARED deps only and never walk `node_modules`. Under pnpm's strict layout
  * maninak's own transitive deps leak into resolution (e.g. `react` riding in via
- * eslint-plugin-vue, or `tailwindcss` as a peer-auto-install of eslint-plugin-tailwindcss); a
+ * eslint-plugin-vue, or `tailwindcss` as a peer-auto-install of the Tailwind plugin); a
  * resolvability check would turn those into false positives. The consumer's declared deps,
  * anywhere in the workspace, are the authoritative answer for "does the user intend to lint
  * this kind of file".

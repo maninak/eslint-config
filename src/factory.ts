@@ -3,7 +3,12 @@ import type {
   OptionsTypescript,
   TypedFlatConfigItem,
 } from '@antfu/eslint-config'
-import type { FilenameCaseOptions, RequireJsdocOptions, SortImportsOptions } from './config.js'
+import type {
+  FilenameCaseOptions,
+  RequireJsdocOptions,
+  SortImportsOptions,
+  TailwindOptions,
+} from './config.js'
 import path from 'node:path'
 import antfu, { GLOB_TS, GLOB_TSX, GLOB_VUE } from '@antfu/eslint-config'
 import { glob } from 'tinyglobby'
@@ -12,6 +17,8 @@ import buildConfig, {
   buildFilenameCaseBlocks,
   buildRequireJsdocBlocks,
   buildSortImportsBlock,
+  buildTailwindBlocks,
+  isTailwindInConsumerDeps,
 } from './config.js'
 import { hasConsumerTsconfig, isInConsumerDeps } from './utils.js'
 
@@ -54,6 +61,25 @@ export interface ManinakExtraOptions {
    * once, and each fix is a manual `git mv`.
    */
   filenameCase?: boolean | FilenameCaseOptions
+
+  /**
+   * Switch on the Tailwind CSS rules, telling them where your theme lives: `entryPoint` for a
+   * Tailwind v4 CSS entry point, `tailwindConfig` for a v3 config. See
+   * {@link TailwindOptions}.
+   *
+   * There is no default and nothing is guessed. The plugin learns the project's theme from
+   * that file, and given none it falls back to Tailwind's stock theme: it would enforce a
+   * class order the project never configured and treat every themed class as unknown. So the
+   * rules stay off until the path is given, and the preset says so once when it spots Tailwind
+   * in the workspace (including via `@nuxt/ui`, which carries Tailwind v4 without declaring
+   * it). Pass `false` to switch them off and silence that.
+   *
+   * @example
+   * ```ts
+   * tailwind: { entryPoint: './apps/web/assets/css/main.css' },
+   * ```
+   */
+  tailwind?: false | TailwindOptions
 
   /**
    * Extend the preset's import ordering with your own groups, without restating the ordering.
@@ -191,6 +217,7 @@ export async function maninak(
     requireJsdoc,
     requireJsdocInUtils = false,
     vueTypeAware = false,
+    tailwind,
     ...antfuOptions
   } = options
   const jsdocBlocks = resolveRequireJsdocBlocks(requireJsdoc ?? requireJsdocInUtils)
@@ -199,6 +226,7 @@ export async function maninak(
     filenameCase === false
       ? []
       : buildFilenameCaseBlocks(filenameCase === true ? {} : filenameCase)
+  const tailwindBlocks = resolveTailwindBlocks(tailwind)
   const [maninakOptions, ...maninakConfig] = buildConfig()
   const nuxtConfigs = isInConsumerDeps('nuxt') ? await getNuxtConfigs() : []
   const frameworkDefaults = {
@@ -242,6 +270,7 @@ export async function maninak(
     ...maninakConfig,
     ...jsdocBlocks,
     ...filenameCaseBlocks,
+    ...tailwindBlocks,
     ...sortImportsBlocks,
     ...nuxtConfigs,
     ...userConfigs,
@@ -260,6 +289,37 @@ export async function maninak(
   }
 
   return configs
+}
+
+/**
+ * The Tailwind blocks, or none plus a one-off explanation.
+ *
+ * Saying nothing when Tailwind is clearly in use would leave a repo quietly unlinted, which is
+ * how taiga-grove ended up with ~1500 unchecked class attributes: it carries Tailwind through
+ * `@nuxt/ui` and never declared `tailwindcss`, so nothing ever switched the rules on and
+ * nothing ever said why.
+ */
+function resolveTailwindBlocks(
+  option: false | TailwindOptions | undefined,
+): TypedFlatConfigItem[] {
+  if (option === false) {
+    return []
+  }
+  if (option) {
+    return buildTailwindBlocks(option)
+  }
+
+  if (isTailwindInConsumerDeps()) {
+    console.warn(
+      `[@maninak/eslint-config] Tailwind CSS is in this workspace, but the Tailwind rules ` +
+        `are off: they need to know where your theme lives, and guessing would mean linting ` +
+        `against the wrong one. Pass tailwind: { entryPoint: './path/to/app.css' } on ` +
+        `Tailwind v4, or tailwind: { tailwindConfig: './tailwind.config.js' } on v3. Pass ` +
+        `tailwind: false to silence this.`,
+    )
+  }
+
+  return []
 }
 
 /**

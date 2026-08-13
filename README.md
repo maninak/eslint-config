@@ -33,14 +33,36 @@ An opinionated, holistic lint-and-format suite designed to have your back, clean
 | YAML / TOML                                                      | ✅     |
 | Markdown                                                         | ✅     |
 | Test files (Vitest, Jest, Playwright, WDIO, Mocha, Jasmine, ...) | ✅     |
-| Tailwind CSS                                                     | ✅     |
+| Tailwind CSS (v3 and v4, opt in, see below)                      | ✅     |
+
+### Tailwind CSS
+
+Tailwind rules come from [`eslint-plugin-better-tailwindcss`](https://github.com/schoero/eslint-plugin-better-tailwindcss), which covers Tailwind 3 and 4. They are off until you say where your theme lives:
+
+```js
+export default maninak({
+  // Tailwind v4: the CSS file that starts `@import "tailwindcss"`
+  tailwind: { entryPoint: './apps/web/assets/css/main.css' },
+
+  // Tailwind v3: your config file instead
+  // tailwind: { tailwindConfig: './tailwind.config.js' },
+})
+```
+
+The plugin reads that file to learn your real theme. Given nothing it quietly falls back to Tailwind's stock theme, and then enforces a class order you never configured while treating every themed class as unknown, so the preset refuses to guess: no entry point, no Tailwind rules. A path that does not resolve fails the config outright rather than linting against the wrong theme.
+
+`tailwindcss` also has to be resolvable from where you run ESLint, since the plugin loads your theme through the installed Tailwind and disables every rule when it cannot find one. A transitive copy does not count: pnpm leaves it unlinked, so a Nuxt UI app that gets Tailwind through `@nuxt/ui` needs `tailwindcss` added to its own devDependencies. The preset fails the config rather than let the linting you asked for silently not happen.
+
+When Tailwind is in your workspace and you have not set this, the preset says so once. It spots Tailwind through `@nuxt/ui` and the `@tailwindcss/*` build plugins too, not just a direct `tailwindcss` dependency, because a Nuxt UI app is a Tailwind app that never declares Tailwind. Pass `tailwind: false` to switch the rules off and silence that.
+
+Two rules from the plugin's `recommended` set are off: `enforce-consistent-line-wrapping`, because it rewraps class strings across lines and formatting here belongs to prettier, and `no-unknown-classes`, because real projects mix Tailwind utilities with their own class names.
 
 ## Setup
 
 ### 1. Install
 
 ```bash
-npm install -D @maninak/eslint-config eslint@^9.10.0
+npm install -D @maninak/eslint-config eslint@^9.38.0
 ```
 
 ### 2. Create config file

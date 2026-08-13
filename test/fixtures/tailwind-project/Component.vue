@@ -1,8 +1,7 @@
+<script setup lang="ts"></script>
 
 <template>
-  <!-- class order intentionally wrong: `p-4` should come before `mt-2` alphabetically -->
-  <div class="mt-2 p-4">Hello</div>
+  <!-- Class order is deliberately wrong: Tailwind sorts margin before padding, so this must
+       come out as `mt-2 p-4`. Written the other way round so the rule has something to fix. -->
+  <div class="p-4 mt-2">Hello</div>
 </template>
-
-<script setup lang="ts">
-</script>

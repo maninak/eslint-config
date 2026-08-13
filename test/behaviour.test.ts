@@ -1,6 +1,8 @@
 import type { LintResult } from './helpers.js'
 import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { findTailwindInstall } from '../src/config.js'
 import maninak from '../src/index.js'
 import { callAtDir, lint, lintAndFix, lintAndFixRule, resolveRule } from './helpers.js'
 
@@ -1548,17 +1550,122 @@ describe('prettier-vue rules fire on .vue files', () => {
   })
 })
 
-describe('tailwindcss rules are registered on .vue files when tailwindcss is a dep', () => {
-  it('tailwindcss/classnames-order is active', async () => {
-    // Checking rule registration rather than linting a file: running the rule requires a live
-    // tailwindcss install in the fixture cwd, which would make this an integration test.
-    const severity = await callAtDir(
-      'test/fixtures/tailwind-project',
-      async () => await resolveRule('Component.vue', 'tailwindcss/classnames-order'),
+describe('tailwind rules need the project entry point before they will run', () => {
+  /*
+   * The plugin learns the project's theme from its CSS entry point. Given none it silently
+   * falls back to Tailwind's stock theme, so it enforces a class order the project never
+   * configured. Off with an explanation beats on and wrong, and the fixture carries Tailwind
+   * the way taiga-grove does, through `@nuxt/ui` with no `tailwindcss` of its own, so the
+   * carrier detection is exercised too.
+   */
+  const fixtureDir = 'test/fixtures/tailwind-project'
+  const orderRule = 'better-tailwindcss/enforce-consistent-class-order'
+
+  it('stays off and says why when no entry point is given', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const severity = await callAtDir(
+        fixtureDir,
+        async () => await resolveRule('Component.vue', orderRule),
+      )
+
+      expect(severity).toBeUndefined()
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('entryPoint'))
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('fires on a .vue class attribute once the entry point is given', async () => {
+    const results = await callAtDir(
+      fixtureDir,
+      async () => await lint('Component.vue', { tailwind: { entryPoint: './main.css' } }),
     )
 
-    expect(severity).toBeDefined()
-    expect(severity![0]).not.toBe('off')
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: orderRule, line: 6, severity: 1 }),
+    )
+  })
+
+  it('autofixes the class order in a .vue template', async () => {
+    const fixed = await callAtDir(
+      fixtureDir,
+      async () =>
+        await lintAndFix('Component.vue', { tailwind: { entryPoint: './main.css' } }),
+    )
+
+    expect(fixed).toContain('class="mt-2 p-4"')
+  })
+
+  it('keeps line wrapping and unknown-classes off, since prettier owns formatting', async () => {
+    const [wrapping, unknown] = await callAtDir(fixtureDir, async () => {
+      const options = { tailwind: { entryPoint: './main.css' } }
+
+      return [
+        await resolveRule(
+          'Component.vue',
+          'better-tailwindcss/enforce-consistent-line-wrapping',
+          options,
+        ),
+        await resolveRule('Component.vue', 'better-tailwindcss/no-unknown-classes', options),
+      ]
+    })
+
+    expect(wrapping?.[0]).toBe('off')
+    expect(unknown?.[0]).toBe('off')
+  })
+
+  it('stays off files that hold no class strings, rather than every file linted', async () => {
+    const severities = await callAtDir(fixtureDir, async () => {
+      const options = { tailwind: { entryPoint: './main.css' } }
+
+      return await Promise.all(
+        ['data.json', 'Cargo.toml', 'ci.yaml'].map(
+          async (file) => await resolveRule(file, orderRule, options),
+        ),
+      )
+    })
+
+    expect(severities).toEqual([undefined, undefined, undefined])
+  })
+
+  it('throws on an entry point that does not exist, rather than linting the stock theme', async () =>
+    await callAtDir(fixtureDir, async () => {
+      const build = maninak({ tailwind: { entryPoint: './nope.css' } })
+
+      await expect(build).rejects.toThrow(/does not exist/)
+    }))
+
+  it('finds the nearest installed tailwindcss by walking up from the given directory', () => {
+    const found = findTailwindInstall(path.resolve(fixtureDir))
+
+    expect(found).toBe(path.resolve('node_modules/tailwindcss'))
+  })
+
+  /*
+   * A path with no real ancestor but the filesystem root, so the walk is guaranteed to end
+   * empty-handed wherever the repo is checked out.
+   */
+  it('reports no install when nothing up the tree has one', () => {
+    const found = findTailwindInstall('/no-such-root-9e3f/deep/dir')
+
+    expect(found).toBeUndefined()
+  })
+
+  it('says nothing when the workspace has no tailwind at all', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      await callAtDir(
+        'test/fixtures/vue-project',
+        async () => await resolveRule('Component.vue', orderRule),
+      )
+
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('entryPoint'))
+    } finally {
+      warn.mockRestore()
+    }
   })
 })
 
