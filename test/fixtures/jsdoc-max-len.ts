@@ -85,3 +85,40 @@ export const _trailing = 1 /** this trailing doc comment is intentionally longer
 /**
  * this description line is sized so that only the trailing closing marker tips it past col 95 */
 export const _inlineCloser = 1
+
+// @case wrap-paragraph-fire
+// An over-long line whose paragraph continues below. The fix must reflow the whole run:
+// wrapping the line alone strands its overflow on a line of its own while the words below
+// stay put.
+/**
+ * cccccccccccccccccccccccccccccccccccccccccccccccccc dddddddddddddddddddddddddddddddddddddddddddddddddd
+ * eeeeeeeeee
+ */
+export const _paragraph = 1
+
+// @case keep-bullet-boundary-ok
+// The line below the over-long one opens a bullet, so it starts a new run and is never
+// absorbed. The long line above it still wraps; only the merge is forbidden.
+/**
+ * ffffffffffffffffffffffffffffffffffffffffffffffffff gggggggggggggggggggggggggggggggggggggggggggggggggg
+ * - a bullet that must not be merged into the paragraph above
+ */
+export const _bulletBoundary = 1
+
+// @case wrap-above-url-fire
+// An over-long line whose paragraph continues into a line holding an unbreakable URL. The
+// run must stop at that line: absorbing it would make the whole paragraph unwrappable, so
+// the long line above would silently stop wrapping.
+/**
+ * hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii
+ * https://example.com/another/really/long/path/segment/with/no/spaces/at/all/that/cannot/wrap/ok
+ */
+export const _aboveUrl = 1
+
+// @case wrap-oneline-indented-fire
+// A single-line block that is indented: the expansion must keep the original indent rather
+// than adding a second one in front of `/**`.
+export interface _Indented {
+  /** jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk */
+  indented: number
+}

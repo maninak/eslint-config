@@ -7,10 +7,15 @@ const DEFAULT_MAX_COLUMNS = 95
  * Enforces that no physical line of a JSDoc block comment (a `/**` block) runs past the column
  * limit, wrapping overflowing prose onto continuation lines that keep the same `* ` prefix.
  *
- * The fixer only ever inserts line breaks between existing words. It never joins lines,
- * reorders text, or rewrites content, so it preserves deliberate breaks and touches only the
- * lines that are too long. It leaves untouched, and does not report, any line it cannot wrap
- * safely:
+ * The fixer reflows the PARAGRAPH the over-long line opens, not the line alone: it pulls in
+ * the plain-prose lines that follow and repacks the run. Wrapping a line by itself pushes its
+ * overflow onto a line of its own, and since the words below never move up, the result is an
+ * orphan of a word or two sitting under a full line, which reads worse than the long line did.
+ * A run stops at anything that starts something new (a blank line, a `@tag`, a bullet, a
+ * quote, a heading, a hanging-indented continuation, a fence), so only prose that was already
+ * one paragraph is ever joined. It never reorders or rewrites words.
+ *
+ * It leaves untouched, and does not report, any line it cannot wrap safely:
  * - fenced code blocks and `@example` bodies, where reflowing would corrupt the code;
  * - lines with an inline `{@tag ...}`, a markdown table (a `|`), or the closing `*\/` on them;
  * - lines whose single longest word cannot itself fit, e.g. a long URL: no break would help.
@@ -133,7 +138,9 @@ const jsdocMaxLen: Rule.RuleModule = {
       }
 
       const body = wrapped.map((chunk) => `${prefix}${chunk}`).join(nl)
-      const replacement = `${indent}/**${nl}${body}${nl}${indent} */`
+      // The range starts at `/**`, past the existing indent, so re-emitting it here would
+      // indent the opening line twice.
+      const replacement = `/**${nl}${body}${nl}${indent} */`
 
       context.report({
         loc: comment.loc!,
@@ -144,9 +151,40 @@ const jsdocMaxLen: Rule.RuleModule = {
     }
 
     /**
-     * A multiline block: wrap each overflowing ` * ` continuation line on its own, so breaks
-     * elsewhere survive. Tracks fenced-code and `@example` regions so their bodies are never
-     * reflowed.
+     * True when `content` continues the paragraph above rather than starting something new, so
+     * an over-long line above may reflow into it. Anything that carries its own structure (a
+     * tag, a bullet, an ordered marker, a quote, a heading, a fence, a hanging indent, the
+     * closing marker) starts a new run and is never absorbed into the one before it.
+     */
+    function isPlainContinuation(content: string): boolean {
+      const trimmed = content.trim()
+
+      return (
+        trimmed !== '' &&
+        trimmed !== '/' &&
+        !/^\s/.test(content) &&
+        !/^[@\-*+>#]/.test(trimmed) &&
+        !/^\d+[).]\s/.test(trimmed) &&
+        !trimmed.startsWith('```') &&
+        !isUnsafeToWrap(trimmed)
+      )
+    }
+
+    /**
+     * True when some word in `content` cannot fit the budget even on a line of its own, e.g. a
+     * long URL. Absorbing such a line would poison the whole run: {@link wrapContent} gives up
+     * on the lot, and lines that could have wrapped would silently stop wrapping.
+     */
+    function hasUnbreakableWord(content: string, prefix: string): boolean {
+      return content
+        .trim()
+        .split(/\s+/)
+        .some((word) => prefix.length + word.length > max)
+    }
+
+    /**
+     * A multiline block: reflow each paragraph that opens with an overflowing ` * ` line.
+     * Tracks fenced-code and `@example` regions so their bodies are never reflowed.
      */
     function checkMultiLine(comment: Comment): void {
       const startLine = comment.loc?.start.line ?? 0
@@ -195,24 +233,55 @@ const jsdocMaxLen: Rule.RuleModule = {
         }
 
         const prefix = `${(parsed[1] ?? '').replace(/\s+$/, '')} `
-        const wrapped = wrapContent(trimmed, prefix)
-        if (!wrapped || wrapped.length < 2) {
-          continue // a single word too long to break, or already fits once trimmed: leave it
+
+        // Absorb the rest of the paragraph, so the overflow reflows into the words below
+        // instead of being stranded on a line of its own.
+        let last = ln
+        let content = trimmed
+        while (last < endLine) {
+          const nextText = src.lines[last] // 0-indexed, so this is line `last + 1`
+          const nextParsed = nextText?.match(/^(\s*\*\s?)(.*)$/)
+          if (!nextText || !nextParsed) {
+            break
+          }
+          const nextContent = nextParsed[2] ?? ''
+          if (!isPlainContinuation(nextContent)) {
+            break
+          }
+          if (hasUnbreakableWord(nextContent, prefix)) {
+            break
+          }
+          if (`${(nextParsed[1] ?? '').replace(/\s+$/, '')} ` !== prefix) {
+            break
+          }
+          content = `${content} ${nextContent.trim()}`
+          last++
         }
 
+        const wrapped = wrapContent(content, prefix)
+        if (!wrapped || wrapped.length === 0) {
+          continue // a single word too long to break: no line break helps, so leave it
+        }
+
+        const lastText = src.lines[last - 1] ?? ''
         const replacement = wrapped.map((chunk) => `${prefix}${chunk}`).join(nl)
         const from = src.getIndexFromLoc({ line: ln, column: 0 })
-        const to = from + lineText.length
+        const to = src.getIndexFromLoc({ line: last, column: 0 }) + lastText.length
+        if (replacement === src.getText().slice(from, to)) {
+          continue // already packed as tightly as this rule would pack it
+        }
 
         context.report({
           loc: {
             start: { line: ln, column: 0 },
-            end: { line: ln, column: lineText.length },
+            end: { line: last, column: lastText.length },
           },
           messageId: 'tooLong',
           data: { max: String(max) },
           fix: (fixer) => fixer.replaceTextRange([from, to], replacement),
         })
+
+        ln = last // the whole run is handled; the loop's own step moves past it
       }
     }
 

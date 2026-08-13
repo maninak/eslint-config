@@ -110,6 +110,28 @@ export async function lintAndFix(
 }
 
 /**
+ * Like {@link lintAndFix}, but applies only `ruleId`'s own fixes. Use it to assert what a rule
+ * actually produces: under the full fixer, prettier reformats whatever the rule emitted, so a
+ * rule that indents its output wrongly still ends up looking right and the test proves
+ * nothing.
+ */
+export async function lintAndFixRule(
+  fixturePath: string,
+  ruleId: string,
+  options: Parameters<typeof maninak>[0] = {},
+): Promise<string> {
+  const config = await maninak(options)
+  const eslint = new ESLint({
+    overrideConfigFile: true,
+    overrideConfig: config,
+    fix: (message) => message.ruleId === ruleId,
+  })
+  const results = await eslint.lintFiles([fixturePath])
+
+  return results[0]?.output ?? readFileSync(fixturePath, 'utf-8')
+}
+
+/**
  * Temporarily chdirs to `desiredCwd` (resolved relative to the maninak repo root, not to the
  * caller) for the duration of `callee`, then restores the previous cwd. Use this when a test
  * needs maninak's framework auto-detection to see specific deps in `package.json` — for

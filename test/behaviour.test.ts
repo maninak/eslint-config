@@ -2,7 +2,7 @@ import type { LintResult } from './helpers.js'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import maninak from '../src/index.js'
-import { callAtDir, lint, lintAndFix, resolveRule } from './helpers.js'
+import { callAtDir, lint, lintAndFix, lintAndFixRule, resolveRule } from './helpers.js'
 
 const tsFixturePath = 'test/fixtures/typescript.ts'
 const typeAwareFixturePath = 'test/fixtures/type-aware.ts'
@@ -1066,7 +1066,23 @@ describe('maninak/jsdoc-max-len', () => {
     )
   }
 
-  const fireCases = ['wrap-oneline-fire', 'wrap-param-fire', 'wrap-prose-fire']
+  const c50 = 'c'.repeat(50)
+  const d50 = 'd'.repeat(50)
+  const f50 = 'f'.repeat(50)
+  const g50 = 'g'.repeat(50)
+  const h50 = 'h'.repeat(50)
+  const i50 = 'i'.repeat(50)
+  const j50 = 'j'.repeat(50)
+  const k50 = 'k'.repeat(50)
+
+  const fireCases = [
+    'wrap-oneline-fire',
+    'wrap-param-fire',
+    'wrap-prose-fire',
+    'wrap-paragraph-fire',
+    'wrap-above-url-fire',
+    'wrap-oneline-indented-fire',
+  ]
 
   for (const caseName of fireCases) {
     it(`flags the overflowing ${caseName} block`, async () => {
@@ -1101,6 +1117,12 @@ describe('maninak/jsdoc-max-len', () => {
     expect(fixed).toContain(`/**\n * ${a50}\n * ${b50}\n */`)
   })
 
+  it('auto-fix keeps the original indent when expanding an indented one-line block', async () => {
+    const fixed = await lintAndFixRule(fixturePath, ruleId)
+
+    expect(fixed).toContain(`{\n  /**\n   * ${j50}\n   * ${k50}\n   */`)
+  })
+
   it('auto-fix wraps a long @param line, keeping the tag on the first line', async () => {
     const fixed = await lintAndFix(fixturePath)
 
@@ -1117,6 +1139,39 @@ describe('maninak/jsdoc-max-len', () => {
     // words must fit the limit (proving the wrap happened; word preservation is locked by the
     // exact one-line and @param assertions above).
     expect(proseLine !== undefined && proseLine.length <= 95).toBe(true)
+  })
+
+  it('auto-fix reflows the paragraph rather than stranding the overflow alone', async () => {
+    /*
+     * Observed against taiga-grove on 2026-08-13: wrapping each over-long line by itself left
+     * 1009 comments with an orphan word or two under a full line, because the words below the
+     * break never moved up. The whole run must repack, so `eeeeeeeeee` rides up onto the line
+     * with room for it rather than staying on one of its own.
+     */
+    const fixed = await lintAndFix(fixturePath)
+
+    expect(fixed).toContain(`/**\n * ${c50}\n * ${d50} eeeeeeeeee\n */`)
+  })
+
+  it('auto-fix never merges a following bullet into the paragraph above it', async () => {
+    const fixed = await lintAndFix(fixturePath)
+
+    expect(fixed).toContain(
+      `/**\n * ${f50}\n * ${g50}\n * - a bullet that must not be merged into the paragraph above\n */`,
+    )
+  })
+
+  it('auto-fix still wraps the line above an unwrappable URL', async () => {
+    /*
+     * The URL line cannot be wrapped at all, and absorbing it into the run would make the
+     * whole paragraph unwrappable, so the perfectly wrappable line above it would silently
+     * stop being fixed. The run has to stop at that line instead.
+     */
+    const fixed = await lintAndFix(fixturePath)
+
+    expect(fixed).toContain(
+      `/**\n * ${h50}\n * ${i50}\n * https://example.com/another/really/long/path/segment/with/no/spaces/at/all/that/cannot/wrap/ok\n */`,
+    )
   })
 
   it('keeps the deliberately-skipped long lines byte-for-byte', async () => {
