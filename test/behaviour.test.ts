@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import maninak from '../src/index.js'
 import { callAtDir, lint, lintAndFix, resolveRule } from './helpers.js'
 
 const tsFixturePath = 'test/fixtures/typescript.ts'
@@ -1030,6 +1031,135 @@ describe('tailwindcss rules are registered on .vue files when tailwindcss is a d
   })
 })
 
+describe('vueTypeAware is inapplicable rather than fatal without Vue', () => {
+  /*
+   * A repo with no Vue has no `antfu/vue/rules` block to point at a project, and the code
+   * that points it used to throw when the block was missing. That turned an option that is
+   * merely inapplicable into a hard failure of the consumer's whole lint, while the sibling
+   * tsconfig check deliberately treats "no SFCs here" as benign. The two paths now agree.
+   */
+  it('builds a usable config and says why the option did nothing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    try {
+      const configs = await callAtDir(
+        'test/fixtures/multi-ts',
+        async () =>
+          await maninak({
+            vueTypeAware: true,
+            typescript: { tsconfigPath: './tsconfig.json' },
+          }),
+      )
+
+      expect(configs.length).toBeGreaterThan(0)
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('vueTypeAware is on, but Vue support is off') as string,
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('stays silent when the option is off', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    try {
+      await callAtDir(
+        'test/fixtures/multi-ts',
+        async () => await maninak({ typescript: { tsconfigPath: './tsconfig.json' } }),
+      )
+
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('vueTypeAware') as string)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+})
+
+describe('vueTypeAware extends type-aware linting into SFCs', () => {
+  /*
+   * Without the option, antfu leaves `.vue` out of `filesTypeAware` AND gives the Vue block's
+   * inner TS parser no project, so every type-aware rule silently skips SFCs. That is
+   * invisible to the consumer: nothing errors, the rules simply never run, in the files
+   * where a Vue or Nuxt app keeps most of its code.
+   */
+  const options = { vueTypeAware: true, typescript: { tsconfigPath: './tsconfig.json' } }
+
+  async function lintTypeAwareFixture(
+    file: string,
+    withOption: boolean,
+  ): Promise<Awaited<ReturnType<typeof lint>>> {
+    return await callAtDir(
+      'test/fixtures/vue-type-aware',
+      async () => await lint(file, withOption ? options : { typescript: options.typescript }),
+    )
+  }
+
+  it('reports an any flowing into a typed call inside an SFC', async () => {
+    const results = await lintTypeAwareFixture('Unsafe.vue', true)
+
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'ts/no-unsafe-argument' }),
+    )
+  })
+
+  it('reports nothing type-aware in that same SFC when the option is off', async () => {
+    // The paired assertion that makes the case above meaningful, and the measure of what
+    // every Vue consumer is missing today.
+    const results = await lintTypeAwareFixture('Unsafe.vue', false)
+    const typeAware = results.filter((finding) => finding.ruleId?.startsWith('ts/no-unsafe-'))
+
+    expect(typeAware).toEqual([])
+  })
+
+  it('reports nothing type-aware on a well-typed SFC', async () => {
+    // The false-positive guard. Turning the option on must not start flagging ordinary,
+    // correctly-typed component code, or no consumer could ever adopt it.
+    const results = await lintTypeAwareFixture('Clean.vue', true)
+    const typeAware = results.filter((finding) => finding.ruleId?.startsWith('ts/no-unsafe-'))
+
+    expect(typeAware).toEqual([])
+  })
+
+  it('covers the script block but not template expressions', async () => {
+    // A known and deliberate limit: vue-eslint-parser hands typescript-eslint the script
+    // program, so an unsafe value is caught where it is created and not where the template
+    // dereferences it. Locked in so a future parser change that starts type-checking
+    // templates shows up here rather than as a surprise wave of findings in consumers.
+    const results = await lintTypeAwareFixture('UnsafeTemplate.vue', true)
+    const lines = results
+      .filter((finding) => finding.ruleId?.startsWith('ts/no-unsafe-'))
+      .map((finding) => finding.line)
+
+    expect(lines).toEqual([4])
+  })
+
+  it('fails with one actionable error when the tsconfig does not cover SFCs', async () => {
+    // Otherwise every SFC reports "was not found by the project service" as a parse error,
+    // which in a real app is hundreds of failures that never name the cause.
+    const build = callAtDir(
+      'test/fixtures/vue-type-aware-untracked',
+      async () => await maninak(options),
+    )
+
+    await expect(build).rejects.toThrow(/does not include any of the 1 \.vue files/)
+  })
+
+  it('leaves .ts behaviour unchanged whether the option is on or off', async () => {
+    const withOption = await lintTypeAwareFixture('unsafe.ts', true)
+    const withoutOption = await lintTypeAwareFixture('unsafe.ts', false)
+    function unsafeOf(results: Awaited<ReturnType<typeof lint>>): string[] {
+      return results
+        .filter((finding) => finding.ruleId?.startsWith('ts/no-unsafe-'))
+        .map((finding) => `${finding.ruleId}:${finding.line}`)
+        .sort()
+    }
+
+    expect(unsafeOf(withOption)).toEqual(unsafeOf(withoutOption))
+    expect(unsafeOf(withOption).length).toBeGreaterThan(0)
+  })
+})
+
 describe('error-handling rules from newer eslint cores', () => {
   /*
    * `@nuxt/eslint-config` turns both on, so before this they applied to Nuxt consumers only
@@ -1065,7 +1195,7 @@ describe('error-handling rules from newer eslint cores', () => {
 
 describe('unicorn rules reach .vue files', () => {
   /*
-   * antfu v9.3 scoped its unicorn block to a JS/TS glob, which silently stopped 14 rules
+   * antfu v9.3 scoped its unicorn block to a JS/TS glob, which silently stopped every rule
    * reaching SFCs, where a Vue or Nuxt consumer keeps most of its code. The preset mirrors
    * that block onto `.vue`, so this asserts the rules actually run there.
    */

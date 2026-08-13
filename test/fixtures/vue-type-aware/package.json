@@ -1,0 +1,11 @@
+{
+  "name": "vue-type-aware-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "typescript": "*"
+  }
+}

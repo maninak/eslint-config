@@ -3,7 +3,9 @@ import type {
   OptionsTypescript,
   TypedFlatConfigItem,
 } from '@antfu/eslint-config'
-import antfu, { GLOB_VUE } from '@antfu/eslint-config'
+import path from 'node:path'
+import antfu, { GLOB_TS, GLOB_TSX, GLOB_VUE } from '@antfu/eslint-config'
+import { glob } from 'tinyglobby'
 import { merge } from 'ts-deepmerge'
 import buildConfig, { requireJsdocInUtilsBlocks } from './config.js'
 import { hasConsumerTsconfig, isInConsumerDeps } from './utils.js'
@@ -22,6 +24,24 @@ export interface ManinakExtraOptions {
    * Default: `false`. Off by default to keep the preset lower friction.
    */
   requireJsdocInUtils?: boolean
+
+  /**
+   * When true, extend type-aware linting to `.vue` single-file components, so rules needing
+   * type information (`ts/no-unsafe-*`, `ts/no-misused-promises`,
+   * `ts/restrict-template-expressions`, and the rest) run inside SFCs instead of stopping at
+   * the `.vue` boundary.
+   *
+   * Three preconditions, which fail differently on purpose. Vue support must be on, else the
+   * option is inapplicable and is ignored with a warning. Type-aware linting must be active,
+   * meaning a resolved `tsconfig.json` (see `typescript.tsconfigPath`). And that tsconfig's
+   * `include` must cover `.vue`: one that excludes them makes every SFC report "not found in
+   * project" instead of linting, so that case throws with an actionable message rather than
+   * emitting a flood of parser errors.
+   *
+   * Default: `false`. Turning it on surfaces every previously-invisible type error in your
+   * SFCs at once, so it is opt-in until you are ready for that.
+   */
+  vueTypeAware?: boolean
 }
 
 /**
@@ -94,7 +114,7 @@ export async function maninak(
   options: ManinakOptions = {},
   ...userConfigs: Parameters<typeof antfu>['1'][]
 ): Promise<TypedFlatConfigItem[]> {
-  const { requireJsdocInUtils = false, ...antfuOptions } = options
+  const { requireJsdocInUtils = false, vueTypeAware = false, ...antfuOptions } = options
   const [maninakOptions, ...maninakConfig] = buildConfig()
   const nuxtConfigs = isInConsumerDeps('nuxt') ? await getNuxtConfigs() : []
   const frameworkDefaults = {
@@ -103,13 +123,38 @@ export async function maninak(
     react: isInConsumerDeps('react') || isInConsumerDeps('next'),
   }
 
+  const baseOptions = merge(frameworkDefaults, maninakOptions, antfuOptions)
   const tsconfigPaths = resolveTsconfigPaths(antfuOptions.typescript)
+  /*
+   * Vue support has to be on for any of this to mean anything: without it antfu builds no
+   * `.vue` block, so there is nothing to make type-aware. Gating here rather than letting
+   * `giveVueBlockATypeScriptProject` throw keeps a repo that has no Vue at all from having
+   * its whole lint fail over an option that is merely inapplicable to it.
+   */
+  const vueEnabled = Boolean(baseOptions.vue)
+  if (vueTypeAware && !vueEnabled) {
+    console.warn(
+      `[@maninak/eslint-config] vueTypeAware is on, but Vue support is off (no "vue" or ` +
+        `"nuxt" dependency was detected and "vue" was not passed), so there are no .vue ` +
+        `files to lint type-aware. The option is being ignored.`,
+    )
+  }
+  const typeAwareVue = vueTypeAware && vueEnabled && tsconfigPaths !== undefined
+  if (typeAwareVue) {
+    await assertTsconfigCoversVue(tsconfigPaths[0]!)
+  }
   const tsconfigOverride = tsconfigPaths
-    ? { typescript: { tsconfigPath: tsconfigPaths[0] } }
+    ? {
+        typescript: {
+          tsconfigPath: tsconfigPaths[0],
+          // antfu's default omits `.vue`, so the type-aware rules block never matches an SFC.
+          ...(typeAwareVue ? { filesTypeAware: [GLOB_TS, GLOB_TSX, GLOB_VUE] } : {}),
+        },
+      }
     : {}
 
   const configs = await antfu(
-    merge(frameworkDefaults, maninakOptions, antfuOptions, tsconfigOverride),
+    merge(baseOptions, tsconfigOverride),
     ...maninakConfig,
     ...(requireJsdocInUtils ? requireJsdocInUtilsBlocks : []),
     ...nuxtConfigs,
@@ -118,6 +163,11 @@ export async function maninak(
 
   dedupePluginRegistrations(configs)
   restoreUnicornRulesOnVue(configs)
+
+  // Runs before the legacy switch below so both passes agree on which project mode is active.
+  if (typeAwareVue) {
+    giveVueBlockATypeScriptProject(configs, tsconfigPaths[0]!)
+  }
 
   if (tsconfigPaths && tsconfigPaths.length > 1) {
     switchToLegacyProjectMode(configs, tsconfigPaths)
@@ -140,10 +190,9 @@ export async function maninak(
  * A rule whose prefix was stripped and which the winning plugin does not implement is deleted
  * and reported on stderr, rather than left to fail later as an opaque flat-config error.
  *
- * Rewrites blocks by replacing them in `configs` rather than editing them in place: some come
- * from module-level singletons (a plugin's exported `configs.recommended`, this preset's own
- * jsdoc blocks), and editing those would leak into every later `maninak()` call in the
- * process.
+ * Rewrites blocks by replacing them in `configs` rather than editing them in place: some are
+ * module-level singletons, a plugin's exported `configs.recommended` above all, and editing
+ * those would leak into every later `maninak()` call in the process.
  */
 function dedupePluginRegistrations(configs: TypedFlatConfigItem[]): void {
   const winners = new Map<string, unknown>()
@@ -206,6 +255,127 @@ function dedupePluginRegistrations(configs: TypedFlatConfigItem[]): void {
   }
 }
 
+/**
+ * Throws when `tsconfigPath` does not pull `.vue` files into its program while the project
+ * clearly has some.
+ *
+ * A tsconfig whose `include` misses SFCs does not disable type-aware linting for them, it
+ * makes
+ * every one report `was not found by the project service` as a parse error, so a 138-SFC app
+ * answers with 138 opaque failures and no hint of the cause. Nuxt's generated
+ * `.nuxt/tsconfig.json` covers `.vue`; a hand-rolled one frequently does not.
+ *
+ * Resolution goes through TypeScript itself, with the same `.vue` extension registration
+ * typescript-eslint uses, because `include` entries name directories as often as globs and
+ * pattern-matching them by hand gets the answer wrong either way. Stays silent when the
+ * project
+ * has no SFCs at all, where the option is merely redundant rather than misconfigured.
+ */
+async function assertTsconfigCoversVue(tsconfigPath: string): Promise<void> {
+  let loaded
+  try {
+    loaded = (await import('typescript')).default
+  } catch {
+    console.warn(
+      `[@maninak/eslint-config] vueTypeAware is on but "typescript" could not be imported, ` +
+        `so whether "${tsconfigPath}" covers .vue files could not be checked.`,
+    )
+
+    return
+  }
+  // Re-bound as a const so the narrowed module type survives into the closure below; a `let`
+  // widens back to `any` there.
+  const typescript = loaded
+
+  const absolute = path.resolve(process.cwd(), tsconfigPath)
+  // Wrapped rather than passed bare: `sys.readFile` is a method, and handing it over unbound
+  // would strip its `this`.
+  const configFile = typescript.readConfigFile(absolute, (file) =>
+    typescript.sys.readFile(file),
+  )
+  if (configFile.error) {
+    return // Let ESLint report an unreadable tsconfig in its own words.
+  }
+
+  const parsed = typescript.parseJsonConfigFileContent(
+    configFile.config,
+    typescript.sys,
+    path.dirname(absolute),
+    undefined,
+    absolute,
+    undefined,
+    [
+      {
+        extension: '.vue',
+        isMixedContent: true,
+        scriptKind: typescript.ScriptKind.Deferred,
+      },
+    ],
+  )
+  if (parsed.fileNames.some((file) => file.endsWith('.vue'))) {
+    return
+  }
+
+  // Only now is a filesystem sweep worth its cost, and only to tell "misconfigured" apart
+  // from "no SFCs yet".
+  const sfcs = await glob(['**/*.vue'], {
+    cwd: process.cwd(),
+    ignore: ['**/node_modules/**', '**/dist/**', '**/.nuxt/**', '**/.output/**'],
+  })
+  if (sfcs.length === 0) {
+    return
+  }
+
+  throw new Error(
+    `[@maninak/eslint-config] vueTypeAware is on, but "${tsconfigPath}" does not include ` +
+      `any of the ${sfcs.length} .vue files in this project, so each one would report ` +
+      `"was not found by the project service" instead of linting. Add "**/*.vue" to that ` +
+      `tsconfig's "include", point typescript.tsconfigPath at one that covers SFCs (Nuxt ` +
+      `generates .nuxt/tsconfig.json), or set vueTypeAware: false.`,
+  )
+}
+
+/** Name of the antfu block that parses `.vue`, which needs a project to resolve types. */
+const ANTFU_VUE_BLOCK_NAME = 'antfu/vue/rules'
+
+/**
+ * Points the Vue block's inner TypeScript parser at the consumer's tsconfig.
+ *
+ * antfu configures that block with `vue-eslint-parser` wrapping `@typescript-eslint/parser`
+ * and `extraFileExtensions: ['.vue']`, but sets neither `projectService` nor `project`.
+ * Without
+ * one, matching an SFC to a type-aware rule only makes typescript-eslint bail with "you have
+ * used a rule which requires type information, but don't have parserOptions set to generate
+ * type information for this file". Mirrors the shape antfu builds for its own type-aware
+ * parser so both resolve the same program.
+ *
+ * Throws when the block is missing: the caller asked for type-aware SFCs, and silently not
+ * delivering them is the very failure this option exists to end.
+ */
+function giveVueBlockATypeScriptProject(
+  configs: TypedFlatConfigItem[],
+  tsconfigPath: string,
+): void {
+  const block = configs.find((item) => item.name === ANTFU_VUE_BLOCK_NAME)
+  const parserOptions = block?.languageOptions?.['parserOptions'] as
+    Record<string, unknown> | undefined
+
+  if (!parserOptions) {
+    throw new Error(
+      `[@maninak/eslint-config] vueTypeAware is on, but no "${ANTFU_VUE_BLOCK_NAME}" block ` +
+        `with a parser was found, so .vue files would silently keep skipping every ` +
+        `type-aware rule. Check that vue support is enabled and that the installed ` +
+        `@antfu/eslint-config still ships that block.`,
+    )
+  }
+
+  parserOptions['projectService'] = {
+    allowDefaultProject: ['./*.js'],
+    defaultProject: tsconfigPath,
+  }
+  parserOptions['tsconfigRootDir'] = process.cwd()
+}
+
 /** Name of the antfu block whose unicorn rules {@link restoreUnicornRulesOnVue} mirrors. */
 const ANTFU_UNICORN_BLOCK_NAME = 'antfu/unicorn/rules'
 
@@ -214,10 +384,10 @@ const ANTFU_UNICORN_BLOCK_NAME = 'antfu/unicorn/rules'
  *
  * antfu v9.3 scoped that block to `**\/*.?([cm])[jt]s?(x)`, which correctly stopped the rules
  * leaking onto JSON and TOML but also stopped them reaching `.vue`, where a Vue or Nuxt
- * consumer keeps most of its code. Nothing errors when that happens: 14 rules including
- * `unicorn/error-message`, `unicorn/throw-new-error` and `unicorn/prefer-node-protocol` simply
- * stop running. The mirrored block is inserted directly after the source so every later block,
- * `maninak/prettier-vue` above all, still overrides it.
+ * consumer keeps most of its code. Nothing errors when that happens: every rule in that
+ * block, `unicorn/error-message`, `unicorn/throw-new-error` and `unicorn/prefer-node-protocol`
+ * among them, simply stops running. The mirrored block is inserted directly after the source,
+ * so every later block, `maninak/prettier-vue` above all, still overrides it.
  *
  * No-ops once antfu's own glob covers `.vue` again, and reports on stderr if the source block
  * is gone, since a silent no-op here is the exact regression this exists to prevent.
