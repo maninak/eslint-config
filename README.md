@@ -367,6 +367,33 @@ Requirements and limits, all worth knowing before you turn it on:
 - **It costs roughly 1.5x lint time on a Vue-heavy tree** (measured: 60 SFCs went from ~3.0s to ~4.4s, about 23ms extra per SFC). That cost is why it stays opt-in rather than becoming the default.
 - **Expect a wave of findings the first time.** These are pre-existing type holes that were never reported, not new ones.
 
+### Optional: add your own import groups
+
+The preset orders imports with `perfectionist/sort-imports`. ESLint replaces a rule's options rather than merging them, so adding one group by hand means copying the preset's whole `groups` array plus `internalPattern`, `order`, `type` and both newline keys, and that copy stops tracking the preset the moment any of them changes. `sortImports` takes only what is yours:
+
+```ts
+export default maninak({
+  sortImports: {
+    customGroups: [
+      {
+        groupName: 'extension-internal',
+        elementNamePattern: '^extension(?:Utils|Helpers)/',
+        after: 'value-external',
+      },
+    ],
+  },
+})
+```
+
+| Key               | What it does                                               |
+| ----------------- | ---------------------------------------------------------- |
+| `customGroups`    | Groups to splice into the preset's ordering                |
+| `internalPattern` | Replaces the preset's `internalPattern` (`['^@/', '^~/']`) |
+
+Each custom group takes `groupName`, one of `after` or `before` naming a preset group, and any other key `perfectionist/sort-imports` accepts in its own `customGroups` (`elementNamePattern`, `modifiers`, `selector`, and the rest). `after` and `before` find a group nested inside one of the preset's bundles, so `after: 'value-sibling'` works. Naming a group the preset does not have throws, rather than silently putting yours somewhere arbitrary. With neither key the group lands just ahead of the `unknown` catch-all.
+
+The preset's groups, in order: `type-import`, `[type-parent, type-sibling, type-index, type-internal]`, `value-builtin`, `value-external`, `value-internal`, `[value-parent, value-sibling, value-index]`, `side-effect`, `ts-equals-import`, `unknown`.
+
 ### Markdown prose is soft-wrapped
 
 Prettier runs with `proseWrap: "never"`, so one paragraph, list item, blockquote or table row is one source line however long it gets. The reader's client wraps to the reader's width, and a three-word edit stays a three-word diff instead of reflowing every line after it.

@@ -3,12 +3,16 @@ import type {
   OptionsTypescript,
   TypedFlatConfigItem,
 } from '@antfu/eslint-config'
-import type { FilenameCaseOptions, RequireJsdocOptions } from './config.js'
+import type { FilenameCaseOptions, RequireJsdocOptions, SortImportsOptions } from './config.js'
 import path from 'node:path'
 import antfu, { GLOB_TS, GLOB_TSX, GLOB_VUE } from '@antfu/eslint-config'
 import { glob } from 'tinyglobby'
 import { merge } from 'ts-deepmerge'
-import buildConfig, { buildFilenameCaseBlocks, buildRequireJsdocBlocks } from './config.js'
+import buildConfig, {
+  buildFilenameCaseBlocks,
+  buildRequireJsdocBlocks,
+  buildSortImportsBlock,
+} from './config.js'
 import { hasConsumerTsconfig, isInConsumerDeps } from './utils.js'
 
 /** Maninak-specific options layered on top of antfu's. All optional. */
@@ -50,6 +54,30 @@ export interface ManinakExtraOptions {
    * once, and each fix is a manual `git mv`.
    */
   filenameCase?: boolean | FilenameCaseOptions
+
+  /**
+   * Extend the preset's import ordering with your own groups, without restating the ordering.
+   *
+   * ESLint replaces a rule's options rather than merging them, so adding one custom group by
+   * hand means copying the preset's whole `groups` array plus `internalPattern`, `order`,
+   * `type` and the newline keys, and that copy stops tracking this preset the moment any of
+   * them changes. Each entry here says only what it is and where it goes; everything else
+   * stays owned by the preset. See {@link SortImportsOptions}.
+   *
+   * @example
+   * ```ts
+   * sortImports: {
+   *   customGroups: [
+   *     {
+   *       groupName: 'extension-internal',
+   *       elementNamePattern: '^extension(?:Utils|Helpers)/',
+   *       after: 'value-external',
+   *     },
+   *   ],
+   * }
+   * ```
+   */
+  sortImports?: SortImportsOptions
 
   /**
    * When true, extend type-aware linting to `.vue` single-file components, so rules needing
@@ -159,12 +187,14 @@ export async function maninak(
 ): Promise<TypedFlatConfigItem[]> {
   const {
     filenameCase = false,
+    sortImports,
     requireJsdoc,
     requireJsdocInUtils = false,
     vueTypeAware = false,
     ...antfuOptions
   } = options
   const jsdocBlocks = resolveRequireJsdocBlocks(requireJsdoc ?? requireJsdocInUtils)
+  const sortImportsBlocks = sortImports ? [buildSortImportsBlock(sortImports)] : []
   const filenameCaseBlocks =
     filenameCase === false
       ? []
@@ -212,6 +242,7 @@ export async function maninak(
     ...maninakConfig,
     ...jsdocBlocks,
     ...filenameCaseBlocks,
+    ...sortImportsBlocks,
     ...nuxtConfigs,
     ...userConfigs,
   )

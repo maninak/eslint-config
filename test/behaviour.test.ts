@@ -789,11 +789,153 @@ describe('ts/switch-exhaustiveness-check counts a default clause as no coverage'
 
     expect(findings).toEqual([
       expect.objectContaining({
-        line: 12,
+        line: 13,
         message: 'Switch is not exhaustive. Cases not matched: "triangle"',
       }),
-      expect.objectContaining({ line: 23 }),
+      expect.objectContaining({
+        line: 24,
+        message: 'Switch is not exhaustive. Cases not matched: "triangle"',
+      }),
     ])
+  })
+})
+
+describe('sortImports extends the import ordering without restating it', () => {
+  /*
+   * ESLint REPLACES a rule's options rather than merging them, so a consumer wanting one
+   * extra import group had to copy the preset's whole `groups` array plus `internalPattern`,
+   * `order`, `type` and both newline keys. radicle-vscode-extension's webviews config does
+   * exactly that today, and that copy stops tracking this preset the moment any of those
+   * change. These lock in that a custom group can be spliced in while everything else stays
+   * owned by the preset.
+   */
+  const ruleId = 'perfectionist/sort-imports'
+  const extensionInternal = {
+    groupName: 'extension-internal',
+    elementNamePattern: '^extension(?:Utils|Helpers)/',
+  }
+
+  it('keeps every preset option the consumer did not name', async () => {
+    const rule = await resolveRule(tsFixturePath, ruleId, {
+      sortImports: { customGroups: [{ ...extensionInternal, after: 'value-external' }] },
+    })
+
+    expect(rule?.[0]).toBe('warn')
+    expect(rule?.[1]).toMatchObject({
+      internalPattern: ['^@/', '^~/'],
+      newlinesBetween: 'ignore',
+      newlinesInside: 'ignore',
+      order: 'asc',
+      type: 'natural',
+    })
+  })
+
+  it('splices the custom group in after the named preset group', async () => {
+    const rule = await resolveRule(tsFixturePath, ruleId, {
+      sortImports: { customGroups: [{ ...extensionInternal, after: 'value-external' }] },
+    })
+    const groups = (rule?.[1] as { groups: unknown[] }).groups
+
+    expect(groups).toEqual([
+      'type-import',
+      ['type-parent', 'type-sibling', 'type-index', 'type-internal'],
+      'value-builtin',
+      'value-external',
+      'extension-internal',
+      'value-internal',
+      ['value-parent', 'value-sibling', 'value-index'],
+      'side-effect',
+      'ts-equals-import',
+      'unknown',
+    ])
+  })
+
+  it('splices before the named preset group when `before` is used', async () => {
+    const rule = await resolveRule(tsFixturePath, ruleId, {
+      sortImports: { customGroups: [{ ...extensionInternal, before: 'value-internal' }] },
+    })
+    const groups = (rule?.[1] as { groups: unknown[] }).groups
+
+    expect(groups[4]).toBe('extension-internal')
+    expect(groups[5]).toBe('value-internal')
+  })
+
+  it('places a group with no `after`/`before` just ahead of the `unknown` catch-all', async () => {
+    const rule = await resolveRule(tsFixturePath, ruleId, {
+      sortImports: { customGroups: [extensionInternal] },
+    })
+    const groups = (rule?.[1] as { groups: unknown[] }).groups
+
+    expect(groups.at(-2)).toBe('extension-internal')
+    expect(groups.at(-1)).toBe('unknown')
+  })
+
+  it('finds a target nested inside one of the preset bundles', async () => {
+    // `value-sibling` only exists inside the ['value-parent', 'value-sibling', 'value-index']
+    // bundle, so a placement naming it must look through nested entries, not just top-level.
+    const rule = await resolveRule(tsFixturePath, ruleId, {
+      sortImports: { customGroups: [{ ...extensionInternal, after: 'value-sibling' }] },
+    })
+    const groups = (rule?.[1] as { groups: unknown[] }).groups
+    const insertedAt = groups.indexOf('extension-internal')
+
+    expect(groups[insertedAt - 1]).toEqual(['value-parent', 'value-sibling', 'value-index'])
+
+    expect(groups[insertedAt + 1]).toBe('side-effect')
+  })
+
+  it('strips the placement keys before handing the group to perfectionist', async () => {
+    const rule = await resolveRule(tsFixturePath, ruleId, {
+      sortImports: { customGroups: [{ ...extensionInternal, after: 'value-external' }] },
+    })
+    const { customGroups } = rule?.[1] as { customGroups: Record<string, unknown>[] }
+
+    expect(customGroups).toEqual([extensionInternal])
+  })
+
+  it('replaces internalPattern when given', async () => {
+    const rule = await resolveRule(tsFixturePath, ruleId, {
+      sortImports: { internalPattern: ['^#/'] },
+    })
+
+    expect(rule?.[1]).toMatchObject({ internalPattern: ['^#/'] })
+  })
+
+  it('throws when a custom group name collides with one already in the ordering', async () => {
+    async function build(): Promise<unknown> {
+      return await maninak({
+        sortImports: {
+          customGroups: [{ ...extensionInternal, groupName: 'value-internal' }],
+        },
+      })
+    }
+
+    await expect(build).rejects.toThrow(/"value-internal" collides with a group already/)
+  })
+
+  it('throws when a placement names a group the preset does not have', async () => {
+    async function build(): Promise<unknown> {
+      return await maninak({
+        sortImports: { customGroups: [{ ...extensionInternal, after: 'value-nonsense' }] },
+      })
+    }
+
+    await expect(build).rejects.toThrow(/"value-nonsense", which is not one of the preset/)
+  })
+
+  it('makes a monorepo-internal alias layout legal on real code', async () => {
+    const fixture = 'test/fixtures/sort-imports/unsorted.ts'
+    const withoutGroup = await lint(fixture)
+    const withGroup = await lint(fixture, {
+      sortImports: { customGroups: [{ ...extensionInternal, after: 'value-external' }] },
+    })
+
+    function sortFindings(results: Awaited<ReturnType<typeof lint>>): LintResult[] {
+      return results.filter((finding) => finding.ruleId === ruleId)
+    }
+
+    expect(sortFindings(withoutGroup)).toEqual([expect.objectContaining({ ruleId })])
+    expect(sortFindings(withGroup)).toEqual([])
   })
 })
 
