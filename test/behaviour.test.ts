@@ -1,8 +1,21 @@
 import type { LintResult } from './helpers.js'
-import { readFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { findTailwindInstall } from '../src/config.js'
+import {
+  detectTailwindTheme,
+  findTailwindInstall,
+  resolveTailwindInstall,
+} from '../src/config.js'
 import maninak from '../src/index.js'
 import { callAtDir, lint, lintAndFix, lintAndFixRule, resolveRule } from './helpers.js'
 
@@ -1550,18 +1563,48 @@ describe('prettier-vue rules fire on .vue files', () => {
   })
 })
 
-describe('tailwind rules need the project entry point before they will run', () => {
+describe('tailwind rules find the project entry point for themselves', () => {
   /*
    * The plugin learns the project's theme from its CSS entry point. Given none it silently
    * falls back to Tailwind's stock theme, so it enforces a class order the project never
-   * configured. Off with an explanation beats on and wrong, and the fixture carries Tailwind
-   * the way taiga-grove does, through `@nuxt/ui` with no `tailwindcss` of its own, so the
-   * carrier detection is exercised too.
+   * configured. The preset therefore finds the theme rather than guessing at one, and says so
+   * when it cannot. The fixture carries Tailwind the way taiga-grove does, through `@nuxt/ui`
+   * with no `tailwindcss` of its own, so the carrier detection is exercised too.
    */
   const fixtureDir = 'test/fixtures/tailwind-project'
   const orderRule = 'better-tailwindcss/enforce-consistent-class-order'
 
-  it('stays off and says why when no entry point is given', async () => {
+  /*
+   * pnpm's layout, built by hand: the carrier symlinked into the consumer's node_modules from
+   * a store directory, with the only copy of Tailwind next to it in that store. This is the
+   * shape taiga-grove has, and the consumer's own root resolves nothing at all in it.
+   */
+  function createCarrierLayout(root: string): { carrier: string; tailwind: string } {
+    const store = path.join(root, 'node_modules/.pnpm/@nuxt+ui@4.9.0/node_modules')
+    const carrier = path.join(store, '@nuxt/ui')
+    const tailwind = path.join(store, 'tailwindcss')
+
+    mkdirSync(carrier, { recursive: true })
+    mkdirSync(tailwind, { recursive: true })
+    mkdirSync(path.join(root, 'node_modules/@nuxt'), { recursive: true })
+    writeFileSync(
+      path.join(carrier, 'package.json'),
+      JSON.stringify({ name: '@nuxt/ui', version: '4.9.0' }),
+    )
+    writeFileSync(
+      path.join(tailwind, 'package.json'),
+      JSON.stringify({ name: 'tailwindcss', version: '4.1.0' }),
+    )
+    writeFileSync(
+      path.join(root, 'package.json'),
+      JSON.stringify({ dependencies: { '@nuxt/ui': '^4.9.0' }, name: 'carrier-consumer' }),
+    )
+    symlinkSync(carrier, path.join(root, 'node_modules/@nuxt/ui'))
+
+    return { carrier, tailwind }
+  }
+
+  it('comes on by itself, with no entry point given and nothing said', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     try {
@@ -1570,11 +1613,19 @@ describe('tailwind rules need the project entry point before they will run', () 
         async () => await resolveRule('Component.vue', orderRule),
       )
 
-      expect(severity).toBeUndefined()
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('entryPoint'))
+      expect(severity?.[0]).toBe('warn')
+      expect(warn).not.toHaveBeenCalled()
     } finally {
       warn.mockRestore()
     }
+  })
+
+  it('points the plugin at the entry point it found, not at the stock theme', async () => {
+    const results = await callAtDir(fixtureDir, async () => await lint('Component.vue'))
+
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: orderRule, line: 6, severity: 1 }),
+    )
   })
 
   it('fires on a .vue class attribute once the entry point is given', async () => {
@@ -1665,6 +1716,174 @@ describe('tailwind rules need the project entry point before they will run', () 
       expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('entryPoint'))
     } finally {
       warn.mockRestore()
+    }
+  })
+
+  /*
+   * Two apps in one repo, each with its own theme. Picking either would lint the other against
+   * a class order it never configured, and the point of detecting at all is to be right, so
+   * ambiguity has to stay the consumer's call.
+   */
+  it('stays off and names the candidates when several files could be the theme', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const severity = await callAtDir(
+        'test/fixtures/tailwind-ambiguous',
+        async () => await resolveRule('Component.vue', orderRule),
+      )
+
+      expect(severity).toBeUndefined()
+      const [message] = warn.mock.calls[0] as [string]
+
+      expect(message).toContain('ambiguous')
+      expect(message).toContain(path.join('apps', 'admin', 'assets', 'main.css'))
+      expect(message).toContain(path.join('apps', 'web', 'assets', 'main.css'))
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('stays off and says so when nothing in the project defines a theme', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const severity = await callAtDir(
+        'test/fixtures/tailwind-no-theme',
+        async () => await resolveRule('Component.vue', orderRule),
+      )
+
+      expect(severity).toBeUndefined()
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('nothing defining'))
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  /*
+   * `commented.css` in that fixture carries `@import "tailwindcss"` inside a comment. Matching
+   * it would hand the plugin a file that imports nothing, and every rule would then run
+   * against the stock theme, which is the exact failure detection exists to avoid.
+   */
+  it('does not read a commented-out import as the entry point', async () => {
+    const { theme, entryPoints } = await callAtDir(
+      'test/fixtures/tailwind-no-theme',
+      async () => await Promise.resolve(detectTailwindTheme(4)),
+    )
+
+    expect(entryPoints).toEqual([])
+    expect(theme).toBeUndefined()
+  })
+
+  it('prefers the v4 entry point over a leftover v3 config, and the reverse on v3', async () => {
+    const [onV4, onV3] = await callAtDir(
+      'test/fixtures/tailwind-both-forms',
+      async () => await Promise.resolve([detectTailwindTheme(4), detectTailwindTheme(3)]),
+    )
+
+    expect(onV4.theme).toEqual({ entryPoint: expect.stringContaining('main.css') as string })
+    expect(onV3.theme).toEqual({
+      tailwindConfig: expect.stringContaining('tailwind.config.js') as string,
+    })
+  })
+
+  it('hands the plugin a cwd it can resolve tailwindcss from', async () => {
+    const settings = await callAtDir(fixtureDir, async () => {
+      const configs = await maninak()
+      return configs.find((config) => config.name === 'maninak/tailwindcss')?.settings
+    })
+
+    const { cwd } = (settings as { 'better-tailwindcss': { cwd: string } })[
+      'better-tailwindcss'
+    ]
+
+    expect(findTailwindInstall(cwd)).toBeDefined()
+  })
+
+  /*
+   * A v4 entry point pulls Tailwind in with `@import "tailwindcss"`, and Tailwind resolves
+   * that relative to the file itself. A carried-in copy satisfies the plugin's own version
+   * check but not this, and the plugin does not degrade: it throws from inside
+   * `enhanced-resolve`, part way through the lint. Detection walks straight into it, so it
+   * has to be caught up front.
+   */
+  it('warns instead of dying when the entry point cannot resolve tailwindcss', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'maninak-unresolvable-'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      createCarrierLayout(root)
+      mkdirSync(path.join(root, 'assets'), { recursive: true })
+      writeFileSync(path.join(root, 'assets/main.css'), '@import "tailwindcss";\n')
+
+      const configs = await callAtDir(root, async () => await maninak())
+
+      expect(configs.find((config) => config.name === 'maninak/tailwindcss')).toBeUndefined()
+      const [message] = warn.mock.calls[0] as [string]
+
+      expect(message).toContain('resolved from the directory it lives in')
+      expect(message).toContain('devDependencies')
+      expect(message).toContain(path.join('assets', 'main.css'))
+    } finally {
+      warn.mockRestore()
+      rmSync(root, { force: true, recursive: true })
+    }
+  })
+
+  /*
+   * A dependency declared by a sub-package is installed into THAT package's node_modules. A
+   * monorepo linted from its root therefore resolves nothing from the cwd, which used to be a
+   * hard error telling the consumer to add a dependency they had already added.
+   */
+  it('finds a tailwindcss installed only in a workspace sub-package', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'maninak-workspace-'))
+
+    try {
+      const web = path.join(root, 'apps/web')
+      mkdirSync(path.join(web, 'node_modules/tailwindcss'), { recursive: true })
+      writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'root' }))
+      writeFileSync(path.join(root, 'pnpm-workspace.yaml'), "packages:\n  - 'apps/*'\n")
+      writeFileSync(
+        path.join(web, 'package.json'),
+        JSON.stringify({ dependencies: { tailwindcss: '^4.1.0' }, name: 'web' }),
+      )
+      writeFileSync(
+        path.join(web, 'node_modules/tailwindcss/package.json'),
+        JSON.stringify({ name: 'tailwindcss', version: '4.1.0' }),
+      )
+
+      const install = await callAtDir(
+        root,
+        async () => await Promise.resolve(resolveTailwindInstall()),
+      )
+
+      // Nothing resolves from the root itself: only from the sub-package that declared it.
+      expect(findTailwindInstall(root)).toBeUndefined()
+      expect(install?.resolveFrom).toBe(web)
+      expect(install?.dir).toBe(path.join(web, 'node_modules/tailwindcss'))
+    } finally {
+      rmSync(root, { force: true, recursive: true })
+    }
+  })
+
+  it('finds a tailwindcss that only a dependency installed, via the carrier', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'maninak-pnpm-'))
+
+    try {
+      const { carrier, tailwind } = createCarrierLayout(root)
+
+      const install = await callAtDir(
+        root,
+        async () => await Promise.resolve(resolveTailwindInstall()),
+      )
+
+      // The consumer's own root resolves nothing: only the carrier's real directory does.
+      expect(findTailwindInstall(root)).toBeUndefined()
+      expect(install?.dir).toBe(tailwind)
+      expect(install?.resolveFrom).toBe(realpathSync(carrier))
+      expect(install?.major).toBe(4)
+    } finally {
+      rmSync(root, { force: true, recursive: true })
     }
   })
 })

@@ -33,11 +33,15 @@ An opinionated, holistic lint-and-format suite designed to have your back, clean
 | YAML / TOML                                                      | ✅     |
 | Markdown                                                         | ✅     |
 | Test files (Vitest, Jest, Playwright, WDIO, Mocha, Jasmine, ...) | ✅     |
-| Tailwind CSS (v3 and v4, opt in, see below)                      | ✅     |
+| Tailwind CSS (v3 and v4, auto-detected, see below)               | ✅     |
 
 ### Tailwind CSS
 
-Tailwind rules come from [`eslint-plugin-better-tailwindcss`](https://github.com/schoero/eslint-plugin-better-tailwindcss), which covers Tailwind 3 and 4. They are off until you say where your theme lives:
+Tailwind rules come from [`eslint-plugin-better-tailwindcss`](https://github.com/schoero/eslint-plugin-better-tailwindcss), which covers Tailwind 3 and 4. They come on by themselves: the preset spots Tailwind in your workspace and finds the file that defines your theme, which is the one CSS file doing `@import "tailwindcss"` on v4, or `tailwind.config.js` on v3. Nothing to configure.
+
+It looks for Tailwind through `@nuxt/ui` and the `@tailwindcss/*` build plugins as well as a direct `tailwindcss` dependency, because a Nuxt UI app is a Tailwind app that never declares Tailwind. A copy installed only by one of your workspace's sub-packages counts too.
+
+Nothing is ever guessed, though. The plugin reads your real theme from that file, and given none it falls back to Tailwind's stock theme, enforcing a class order you never configured while treating every themed class as unknown. So when the answer is not exactly one file, the rules stay off and the preset says which case it hit. That is what these options settle:
 
 ```js
 export default maninak({
@@ -46,14 +50,19 @@ export default maninak({
 
   // Tailwind v3: your config file instead
   // tailwind: { tailwindConfig: './tailwind.config.js' },
+
+  // or switch the rules off entirely
+  // tailwind: false,
 })
 ```
 
-The plugin reads that file to learn your real theme. Given nothing it quietly falls back to Tailwind's stock theme, and then enforces a class order you never configured while treating every themed class as unknown, so the preset refuses to guess: no entry point, no Tailwind rules. A path that does not resolve fails the config outright rather than linting against the wrong theme.
+A path you pass by hand is held to a stricter standard than one the preset found: if it does not resolve, the config fails outright rather than linting against the wrong theme. You asked for these rules by name, so silently not running them would be the worse answer.
 
-`tailwindcss` also has to be resolvable from where you run ESLint, since the plugin loads your theme through the installed Tailwind and disables every rule when it cannot find one. A transitive copy does not count: pnpm leaves it unlinked, so a Nuxt UI app that gets Tailwind through `@nuxt/ui` needs `tailwindcss` added to its own devDependencies. The preset fails the config rather than let the linting you asked for silently not happen.
+#### When Tailwind has to be a dependency
 
-When Tailwind is in your workspace and you have not set this, the preset says so once. It spots Tailwind through `@nuxt/ui` and the `@tailwindcss/*` build plugins too, not just a direct `tailwindcss` dependency, because a Nuxt UI app is a Tailwind app that never declares Tailwind. Pass `tailwind: false` to switch the rules off and silence that.
+On **v4**, `tailwindcss` must be resolvable from the directory your entry-point CSS lives in. Tailwind resolves that file's own `@import "tailwindcss"` relative to the file, and no setting redirects it, so a copy carried in by `@nuxt/ui` does not satisfy it however it is installed. Add `tailwindcss` to the devDependencies of the package that owns that CSS file. The preset checks this up front and tells you so, because the plugin's own failure here is an uncaught throw part-way through the lint.
+
+On **v3** there is no such requirement: a transitively-installed Tailwind is enough, and the preset points the plugin at it for you.
 
 Two rules from the plugin's `recommended` set are off: `enforce-consistent-line-wrapping`, because it rewraps class strings across lines and formatting here belongs to prettier, and `no-unknown-classes`, because real projects mix Tailwind utilities with their own class names.
 

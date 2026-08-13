@@ -49,11 +49,17 @@ function getWorkspaceGlobs(root: string, rootPkg: PackageJsonDeps | undefined): 
   return []
 }
 
-const workspaceDepsCache = new Map<string, PackageJsonDeps[]>()
+/** A `package.json` in the consumer's workspace, and the directory it sits in. */
+interface WorkspacePackage {
+  dir: string
+  pkg: PackageJsonDeps
+}
+
+const workspaceDepsCache = new Map<string, WorkspacePackage[]>()
 
 /**
- * Every declared-dependency set in the consumer's workspace: the root `package.json` plus each
- * sub-package `package.json` reachable through the workspace globs. Cached per cwd (detection
+ * Every `package.json` in the consumer's workspace: the root one plus each sub-package
+ * reachable through the workspace globs, each with its directory. Cached per cwd (detection
  * runs once per `maninak()` call, and several framework checks share the same scan).
  *
  * We read DECLARED deps only and never walk `node_modules`. Under pnpm's strict layout
@@ -63,7 +69,7 @@ const workspaceDepsCache = new Map<string, PackageJsonDeps[]>()
  * anywhere in the workspace, are the authoritative answer for "does the user intend to lint
  * this kind of file".
  */
-function getWorkspacePackageJsons(): PackageJsonDeps[] {
+function getWorkspacePackages(): WorkspacePackage[] {
   const root = process.cwd()
   const cached = workspaceDepsCache.get(root)
   if (cached) {
@@ -71,7 +77,7 @@ function getWorkspacePackageJsons(): PackageJsonDeps[] {
   }
 
   const rootPkg = readPackageJsonAt(root)
-  const result: PackageJsonDeps[] = rootPkg ? [rootPkg] : []
+  const result: WorkspacePackage[] = rootPkg ? [{ dir: root, pkg: rootPkg }] : []
 
   const globs = getWorkspaceGlobs(root, rootPkg)
   if (globs.length > 0) {
@@ -91,9 +97,10 @@ function getWorkspacePackageJsons(): PackageJsonDeps[] {
       })
 
       for (const match of matches) {
-        const pkg = readPackageJsonAt(path.dirname(match))
+        const dir = path.dirname(match)
+        const pkg = readPackageJsonAt(dir)
         if (pkg) {
-          result.push(pkg)
+          result.push({ dir, pkg })
         }
       }
     } catch {
@@ -104,6 +111,22 @@ function getWorkspacePackageJsons(): PackageJsonDeps[] {
   workspaceDepsCache.set(root, result)
 
   return result
+}
+
+function getWorkspacePackageJsons(): PackageJsonDeps[] {
+  return getWorkspacePackages().map(({ pkg }) => pkg)
+}
+
+/**
+ * Every directory in the consumer's workspace that holds a `package.json`, nearest first.
+ *
+ * A dependency declared by a sub-package is installed into THAT package's `node_modules`, not
+ * the workspace root's, so anything resolving a consumer's dependency has to search from each
+ * of these rather than from the cwd alone. taiga-grove keeps `@nuxt/ui` in `apps/web`, where a
+ * root-only search finds nothing at all.
+ */
+export function getWorkspacePackageDirs(): string[] {
+  return getWorkspacePackages().map(({ dir }) => dir)
 }
 
 function isDeclaredIn(pkg: PackageJsonDeps, name: string): boolean {

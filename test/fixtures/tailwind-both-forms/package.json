@@ -1,0 +1,8 @@
+{
+  "name": "tailwind-both-forms-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

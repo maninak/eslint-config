@@ -1,0 +1,8 @@
+{
+  "name": "tailwind-no-theme-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@nuxt/ui": "^4.9.0"
+  }
+}

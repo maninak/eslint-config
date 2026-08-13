@@ -18,7 +18,10 @@ import buildConfig, {
   buildRequireJsdocBlocks,
   buildSortImportsBlock,
   buildTailwindBlocks,
+  detectTailwindTheme,
+  findTailwindThemeProblem,
   isTailwindInConsumerDeps,
+  resolveTailwindInstall,
 } from './config.js'
 import { hasConsumerTsconfig, isInConsumerDeps } from './utils.js'
 
@@ -63,16 +66,20 @@ export interface ManinakExtraOptions {
   filenameCase?: boolean | FilenameCaseOptions
 
   /**
-   * Switch on the Tailwind CSS rules, telling them where your theme lives: `entryPoint` for a
-   * Tailwind v4 CSS entry point, `tailwindConfig` for a v3 config. See
-   * {@link TailwindOptions}.
+   * Where the Tailwind CSS rules should read your theme from: `entryPoint` for a Tailwind v4
+   * CSS entry point, `tailwindConfig` for a v3 config. See {@link TailwindOptions}.
    *
-   * There is no default and nothing is guessed. The plugin learns the project's theme from
-   * that file, and given none it falls back to Tailwind's stock theme: it would enforce a
-   * class order the project never configured and treat every themed class as unknown. So the
-   * rules stay off until the path is given, and the preset says so once when it spots Tailwind
-   * in the workspace (including via `@nuxt/ui`, which carries Tailwind v4 without declaring
-   * it). Pass `false` to switch them off and silence that.
+   * You should not normally need it. The rules come on by themselves when Tailwind is in the
+   * workspace (including via `@nuxt/ui`, which carries Tailwind v4 without declaring it) and
+   * the preset can find your theme: the one CSS file that does `@import "tailwindcss"` on v4,
+   * or `tailwind.config.js` on v3. A Tailwind that only a dependency installed is found too,
+   * so nothing has to be added to your `package.json` to make this work.
+   *
+   * Nothing is ever guessed, though. The plugin learns the project's theme from that file, and
+   * given none it falls back to Tailwind's stock theme: it would enforce a class order the
+   * project never configured and treat every themed class as unknown. So when a repo has
+   * several files that could be the theme, or none, the rules stay off and the preset says
+   * which it was. That is what this option settles. Pass `false` to switch the rules off.
    *
    * @example
    * ```ts
@@ -298,6 +305,14 @@ export async function maninak(
  * how taiga-grove ended up with ~1500 unchecked class attributes: it carries Tailwind through
  * `@nuxt/ui` and never declared `tailwindcss`, so nothing ever switched the rules on and
  * nothing ever said why.
+ *
+ * Detection does the asking now. A theme the preset can find on its own is one the consumer
+ * should not have to write down, so the rules come on by themselves and the options exist for
+ * the cases detection reports it could not settle.
+ *
+ * An explicitly-configured theme still fails loudly, because the consumer asked for these
+ * rules by name and silently not running them would be the worse answer. A DETECTED one only
+ * ever warns: nobody asked for it, so a repo that cannot support it should still lint.
  */
 async function resolveTailwindBlocks(
   option: false | TailwindOptions | undefined,
@@ -305,21 +320,77 @@ async function resolveTailwindBlocks(
   if (option === false) {
     return []
   }
-  if (option) {
-    return await buildTailwindBlocks(option)
+
+  const explicitTheme =
+    option && (option.entryPoint ?? option.tailwindConfig) ? option : undefined
+  if (!explicitTheme && !isTailwindInConsumerDeps()) {
+    return []
   }
 
-  if (isTailwindInConsumerDeps()) {
-    console.warn(
-      `[@maninak/eslint-config] Tailwind CSS is in this workspace, but the Tailwind rules ` +
-        `are off: they need to know where your theme lives, and guessing would mean linting ` +
-        `against the wrong one. Pass tailwind: { entryPoint: './path/to/app.css' } on ` +
-        `Tailwind v4, or tailwind: { tailwindConfig: './tailwind.config.js' } on v3. Pass ` +
-        `tailwind: false to silence this.`,
-    )
+  const install = resolveTailwindInstall()
+  if (!install) {
+    const message =
+      `[@maninak/eslint-config] the Tailwind rules need a "tailwindcss" they can load, and ` +
+      `none could be resolved from "${process.cwd()}" nor from any installed package that ` +
+      `carries one. The plugin reads your theme through the installed Tailwind, and given ` +
+      `none it disables every rule, so the linting would silently not happen. Install your ` +
+      `dependencies, or pass "tailwind: false" to switch the rules off.`
+    if (explicitTheme) {
+      throw new Error(message)
+    }
+    console.warn(message)
+
+    return []
   }
+
+  const { theme, entryPoints } = explicitTheme
+    ? { entryPoints: [], theme: explicitTheme }
+    : detectTailwindTheme(install.major)
+
+  if (theme) {
+    const problem = findTailwindThemeProblem(theme)
+    if (!problem) {
+      return await buildTailwindBlocks(theme, install)
+    }
+    if (explicitTheme) {
+      throw new Error(`[@maninak/eslint-config] ${problem}`)
+    }
+    console.warn(
+      `[@maninak/eslint-config] the Tailwind rules are off: ${problem} They would otherwise ` +
+        `have come on by themselves, having found your theme.`,
+    )
+
+    return []
+  }
+
+  console.warn(
+    entryPoints.length > 1
+      ? `[@maninak/eslint-config] Tailwind CSS is in this workspace, but which file defines ` +
+          `your theme is ambiguous, so the Tailwind rules are off: ${describeEntryPoints(entryPoints)} ` +
+          `all import Tailwind. Linting every one of them against whichever was picked would ` +
+          `enforce a class order the others never configured. Say which with ` +
+          `tailwind: { entryPoint: './path/to/app.css' }, or pass tailwind: false to switch ` +
+          `the rules off.`
+      : `[@maninak/eslint-config] Tailwind CSS is in this workspace, but nothing defining ` +
+          `your theme was found, so the Tailwind rules are off: no CSS file imports Tailwind ` +
+          `and there is no tailwind.config.js at the root. Linting against Tailwind's stock ` +
+          `theme would enforce a class order this project never configured. Pass ` +
+          `tailwind: { entryPoint: './path/to/app.css' } on v4 or ` +
+          `tailwind: { tailwindConfig: './tailwind.config.js' } on v3, or pass tailwind: false ` +
+          `to switch the rules off.`,
+  )
 
   return []
+}
+
+/** The ambiguous entry points, relative and capped, so the warning stays readable. */
+function describeEntryPoints(entryPoints: string[]): string {
+  const shown = entryPoints
+    .slice(0, 5)
+    .map((file) => `"${path.relative(process.cwd(), file)}"`)
+  const rest = entryPoints.length - shown.length
+
+  return rest > 0 ? `${shown.join(', ')} and ${rest} more` : shown.join(', ')
 }
 
 /**

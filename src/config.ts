@@ -4,7 +4,7 @@
 import type antfu from '@antfu/eslint-config'
 import type { TypedFlatConfigItem } from '@antfu/eslint-config'
 import type { Config as PrettierConfig } from 'prettier'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import {
   GLOB_JS,
@@ -22,11 +22,12 @@ import pluginStylistic from '@stylistic/eslint-plugin'
 import configPrettier from 'eslint-config-prettier'
 import pluginJasmine from 'eslint-plugin-jasmine'
 import pluginPrettier from 'eslint-plugin-prettier'
+import { globSync } from 'tinyglobby'
 import compactReturn from './rules/compact-return.js'
 import jsdocMaxLen from './rules/jsdoc-max-len.js'
 import jsdocOneline from './rules/jsdoc-oneline.js'
 import preferConciseAsyncArrow from './rules/prefer-concise-async-arrow.js'
-import { getConsumerVueVersion, isInConsumerDeps } from './utils.js'
+import { getConsumerVueVersion, getWorkspacePackageDirs, isInConsumerDeps } from './utils.js'
 
 const prettier = interopDefault(pluginPrettier)
 
@@ -785,19 +786,15 @@ export function isTailwindInConsumerDeps(): boolean {
 }
 
 /**
- * Walks up from `startDir` looking for an installed `tailwindcss`, mirroring the node_modules
- * search the plugin itself does. Returns the package directory, or `undefined` if there is
- * none the plugin could load.
- *
- * Declared deps are the wrong question here: pnpm leaves a transitively-installed Tailwind
- * unlinked from any `node_modules` the consumer's cwd can see, so a project can depend on
- * Tailwind through `@nuxt/ui` and still have nothing for the plugin to resolve.
+ * Walks up from `startDir` looking for an installed package, mirroring the `node_modules`
+ * search node itself does. Returns the package directory, or `undefined` when nothing up the
+ * tree has one. `name` may be scoped (`@nuxt/ui`).
  */
-export function findTailwindInstall(startDir: string): string | undefined {
+function findInstalledPackage(name: string, startDir: string): string | undefined {
   let dir = path.resolve(startDir)
 
   while (true) {
-    const candidate = path.join(dir, 'node_modules', 'tailwindcss', 'package.json')
+    const candidate = path.join(dir, 'node_modules', ...name.split('/'), 'package.json')
     if (existsSync(candidate)) {
       return path.dirname(candidate)
     }
@@ -810,13 +807,225 @@ export function findTailwindInstall(startDir: string): string | undefined {
 }
 
 /**
- * Where the Tailwind rules should read your theme from. Give exactly one, whichever matches
- * your Tailwind major.
+ * Walks up from `startDir` looking for an installed `tailwindcss`, mirroring the node_modules
+ * search the plugin itself does. Returns the package directory, or `undefined` if there is
+ * none the plugin could load.
  *
- * Neither has a default and nothing is guessed. The plugin reads your theme from this file,
- * and given nothing it falls back to Tailwind's stock theme: it would then enforce a class
- * order the project never configured and call every themed class unknown. A guessed path is
- * worse than no linting, so there is nothing to guess with.
+ * Declared deps are the wrong question here: pnpm leaves a transitively-installed Tailwind
+ * unlinked from any `node_modules` the consumer's cwd can see, so a project can depend on
+ * Tailwind through `@nuxt/ui` and still have nothing here to find.
+ */
+export function findTailwindInstall(startDir: string): string | undefined {
+  return findInstalledPackage('tailwindcss', startDir)
+}
+
+/** An installed Tailwind, and what the plugin needs in order to load the same one. */
+export interface TailwindInstall {
+  /** Directory of the installed `tailwindcss` package. */
+  dir: string
+
+  /**
+   * What to hand the plugin as its `cwd`. Its resolver walks up from there, so this is the
+   * consumer's own cwd whenever that works, and otherwise the package that carried Tailwind
+   * in.
+   */
+  resolveFrom: string
+
+  /** Major version read from the install, or `undefined` when it cannot be read. */
+  major: number | undefined
+}
+
+/**
+ * Finds a Tailwind the plugin can actually load, including one the consumer never declared.
+ *
+ * pnpm's strict layout leaves a transitively-installed Tailwind unlinked from anything the
+ * consumer's cwd can see, so a project depending on Tailwind through `@nuxt/ui` has nothing to
+ * resolve from its own root. That copy does exist, next to the carrier that pulled it in, so
+ * when the cwd comes up empty we look again from each carrier. The plugin takes a `cwd` option
+ * for exactly this ("the working directory to resolve tailwindcss and the config from"), which
+ * lets us point its resolver at the copy we found instead of asking the consumer to declare a
+ * dependency they do not otherwise use.
+ *
+ * The carrier directory is REALPATH'd before it is handed over, and that is load-bearing. pnpm
+ * links carriers into the consumer's `node_modules` from a central store, and the plugin's
+ * resolver walks up from the literal path it is given without resolving symlinks first: given
+ * the link it climbs the consumer's tree and finds nothing, given the real path it climbs the
+ * store and finds Tailwind. Both were tried against the plugin's own resolver.
+ */
+export function resolveTailwindInstall(): TailwindInstall | undefined {
+  /*
+   * A dependency declared by a sub-package is installed into that package's `node_modules`, so
+   * a workspace has to be searched package by package. taiga-grove keeps `@nuxt/ui` under
+   * `apps/web`, and searching only the cwd found nothing there.
+   */
+  const searchRoots = [process.cwd(), ...getWorkspacePackageDirs()]
+
+  for (const root of searchRoots) {
+    const dir = findTailwindInstall(root)
+    if (dir) {
+      return { dir, resolveFrom: root, major: readInstalledMajor(dir) }
+    }
+  }
+
+  for (const root of searchRoots) {
+    // `tailwindcss` itself is skipped: the loop above already answered it for every root.
+    for (const carrier of TAILWIND_CARRIERS.filter((name) => name !== 'tailwindcss')) {
+      const carrierDir = findInstalledPackage(carrier, root)
+      if (!carrierDir) {
+        continue
+      }
+
+      let resolveFrom: string
+      try {
+        resolveFrom = realpathSync(carrierDir)
+      } catch {
+        continue
+      }
+
+      const dir = findTailwindInstall(resolveFrom)
+      if (dir) {
+        return { dir, resolveFrom, major: readInstalledMajor(dir) }
+      }
+    }
+  }
+
+  return undefined
+}
+
+/** The major version of the package installed at `dir`, or `undefined` when unreadable. */
+function readInstalledMajor(dir: string): number | undefined {
+  try {
+    const { version } = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8')) as {
+      version?: string
+    }
+    const major = Number.parseInt(version ?? '', 10)
+
+    return Number.isNaN(major) ? undefined : major
+  } catch {
+    return undefined
+  }
+}
+
+/*
+ * Where a project's own CSS is never found: dependencies, build output, and caches. Scanning
+ * them would be slow and would surface a bundled copy of somebody else's entry point as if it
+ * were this project's theme.
+ */
+const THEME_SCAN_IGNORE = [
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/coverage/**',
+  '**/vendor/**',
+  '**/.git/**',
+  '**/.cache/**',
+  '**/.nuxt/**',
+  '**/.output/**',
+  '**/.next/**',
+  '**/.svelte-kit/**',
+  '**/.vercel/**',
+  '**/.netlify/**',
+]
+
+/** Filenames a Tailwind v3 theme can live in. */
+const TAILWIND_CONFIG_NAMES = [
+  'tailwind.config.js',
+  'tailwind.config.cjs',
+  'tailwind.config.mjs',
+  'tailwind.config.ts',
+]
+
+/*
+ * The v4 entry point is the CSS file that pulls Tailwind in whole, with or without the
+ * `source()`, `layer()` and `theme()` qualifiers v4 allows after the specifier. A partial
+ * import (`@import "tailwindcss/utilities"`) deliberately does not match: a file taking one
+ * layer is not where the theme is defined.
+ */
+const IMPORTS_TAILWIND = /@import\s+(?:url\(\s*)?["']tailwindcss["']/
+
+/** A project's Tailwind theme, as an absolute path in whichever form its major uses. */
+export interface TailwindTheme {
+  entryPoint?: string
+  tailwindConfig?: string
+}
+
+/** What a scan for the project's theme turned up. */
+export interface TailwindThemeDetection {
+  /** The theme, when exactly one candidate was found. */
+  theme?: TailwindTheme
+
+  /** Every CSS file that imports Tailwind. Longer than one means the theme is ambiguous. */
+  entryPoints: string[]
+}
+
+/**
+ * Finds the project's Tailwind theme instead of asking for it, which is how the rest of this
+ * preset behaves and what consumers expect.
+ *
+ * A v3 theme is a config file with a known name at the root. A v4 theme is whichever CSS file
+ * imports Tailwind, which can only be found by reading them, so this globs the project's CSS
+ * and looks inside. Exactly one hit is the answer. Several is a genuinely ambiguous project
+ * and stays the caller's problem to disambiguate, because picking one at random would lint
+ * every other app in the repo against the wrong theme, silently.
+ *
+ * `major` decides which form to prefer when a project carries both, e.g. a v4 codebase keeping
+ * a legacy `tailwind.config.js` around for `@config`.
+ */
+export function detectTailwindTheme(major: number | undefined): TailwindThemeDetection {
+  const root = process.cwd()
+  const tailwindConfig = TAILWIND_CONFIG_NAMES.map((name) => path.join(root, name)).find(
+    (candidate) => existsSync(candidate),
+  )
+
+  if (major === 3 && tailwindConfig) {
+    return { theme: { tailwindConfig }, entryPoints: [] }
+  }
+
+  const entryPoints = findTailwindEntryPoints(root)
+  if (entryPoints.length === 1) {
+    return { theme: { entryPoint: entryPoints[0]! }, entryPoints }
+  }
+  if (entryPoints.length === 0 && tailwindConfig) {
+    return { theme: { tailwindConfig }, entryPoints }
+  }
+
+  return { entryPoints }
+}
+
+/** Every CSS file under `root` that pulls Tailwind in whole, as absolute paths. */
+function findTailwindEntryPoints(root: string): string[] {
+  let files: string[]
+  try {
+    files = globSync(['**/*.css'], { cwd: root, ignore: THEME_SCAN_IGNORE, absolute: true })
+  } catch {
+    // A glob failure degrades to "found nothing", which the caller already explains.
+    return []
+  }
+
+  return files
+    .filter((file) => {
+      try {
+        return IMPORTS_TAILWIND.test(stripCssComments(readFileSync(file, 'utf8')))
+      } catch {
+        return false
+      }
+    })
+    .sort()
+}
+
+/** Blanks comments, so a commented-out import does not read as the project's entry point. */
+function stripCssComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '')
+}
+
+/**
+ * Where the Tailwind rules should read your theme from. Give at most one, whichever matches
+ * your Tailwind major; given neither, the preset finds it.
+ *
+ * Nothing is ever guessed. The plugin reads your theme from this file, and given nothing it
+ * falls back to Tailwind's stock theme: it would then enforce a class order the project never
+ * configured and call every themed class unknown. So detection either finds exactly one answer
+ * or reports that it could not, and these options are how you settle it when it could not.
  */
 export interface TailwindOptions {
   /**
@@ -835,6 +1044,64 @@ export interface TailwindOptions {
 }
 
 /**
+ * Why the Tailwind rules cannot run against `theme`, worded for the consumer, or `undefined`
+ * when they can. The caller decides whether that is fatal: a theme the consumer configured by
+ * hand should fail loudly, one the preset detected should only warn.
+ *
+ * This runs before any rule does, because the failure it guards against is not a rule quietly
+ * switching itself off. It is an uncaught throw from inside the plugin, part-way through a
+ * lint, with a stack trace about `enhanced-resolve` and no hint of what to change.
+ */
+export function findTailwindThemeProblem(theme: TailwindTheme): string | undefined {
+  /*
+   * Spelled out rather than `Object.entries`, whose fallback overload types the value as `any`
+   * on an interface with no index signature, quietly costing the check its type safety.
+   */
+  const given: [key: string, value: string | undefined][] = [
+    ['entryPoint', theme.entryPoint],
+    ['tailwindConfig', theme.tailwindConfig],
+  ]
+
+  for (const [key, value] of given) {
+    if (value === undefined) {
+      continue
+    }
+    const absolute = path.resolve(process.cwd(), value)
+    if (!existsSync(absolute)) {
+      return (
+        `tailwind.${key} is "${value}", which does not exist (resolved to "${absolute}"). ` +
+        `Point it at the file that defines your Tailwind theme, or pass "tailwind: false" to ` +
+        `switch the Tailwind rules off.`
+      )
+    }
+  }
+
+  /*
+   * A v4 entry point pulls Tailwind in with `@import "tailwindcss"`, and Tailwind's own loader
+   * resolves that import relative to the FILE, not to anything we can redirect: the plugin's
+   * `cwd` reaches its version check and its v3 config loader, but not this. So a copy of
+   * Tailwind that only a dependency installed satisfies everything except the one import that
+   * matters, and the lint dies on it.
+   */
+  if (theme.entryPoint !== undefined) {
+    const entryPoint = path.resolve(process.cwd(), theme.entryPoint)
+    if (!findTailwindInstall(path.dirname(entryPoint))) {
+      const shown = path.relative(process.cwd(), entryPoint)
+
+      return (
+        `"${shown}" imports Tailwind, but no "tailwindcss" can be resolved from the directory ` +
+        `it lives in. Tailwind resolves that import relative to the file itself, so a copy ` +
+        `carried in by another package (@nuxt/ui and friends) does not satisfy it however it ` +
+        `is installed. Add "tailwindcss" to the devDependencies of the package that owns ` +
+        `"${shown}", or pass "tailwind: false" to switch the Tailwind rules off.`
+      )
+    }
+  }
+
+  return undefined
+}
+
+/**
  * Builds the Tailwind CSS blocks: the plugin's `recommended` set, plus the two rules this
  * preset switches off.
  *
@@ -844,9 +1111,11 @@ export interface TailwindOptions {
  * Tailwind utilities with its own class names, and this preset has never demanded otherwise.
  *
  * @param options Where the project's Tailwind theme lives. See {@link TailwindOptions}.
+ * @param install The Tailwind to lint against. See {@link resolveTailwindInstall}.
  */
 export async function buildTailwindBlocks(
   options: TailwindOptions,
+  install: TailwindInstall,
 ): Promise<TypedFlatConfigItem[]> {
   const { entryPoint, tailwindConfig } = options
   if (!entryPoint && !tailwindConfig) {
@@ -858,36 +1127,20 @@ export async function buildTailwindBlocks(
   }
 
   /*
-   * Fail loudly on a bad path rather than letting the plugin quietly fall back to the stock
-   * theme. These are explicitly-passed options, so a path that does not resolve is a mistake
-   * in the consumer's config, and every rule below would otherwise report against the wrong
-   * theme without ever saying so.
+   * Fail loudly rather than letting the plugin fall back to the stock theme or die mid-lint.
+   * Callers that can degrade instead ask {@link findTailwindThemeProblem} first; reaching here
+   * with a broken theme means nobody did, and silence would be the worst of the three.
    */
-  const settings: Record<string, string> = {}
-  for (const [key, value] of Object.entries({ entryPoint, tailwindConfig })) {
-    if (value === undefined) {
-      continue
-    }
-    const absolute = path.resolve(process.cwd(), value)
-    if (!existsSync(absolute)) {
-      throw new Error(
-        `[@maninak/eslint-config] tailwind.${key} is "${value}", which does not exist ` +
-          `(resolved to "${absolute}"). Point it at the file that defines your Tailwind ` +
-          `theme, or pass "tailwind: false" to switch the Tailwind rules off.`,
-      )
-    }
-    settings[key] = absolute
+  const problem = findTailwindThemeProblem(options)
+  if (problem) {
+    throw new Error(`[@maninak/eslint-config] ${problem}`)
   }
 
-  if (!findTailwindInstall(process.cwd())) {
-    throw new Error(
-      `[@maninak/eslint-config] the Tailwind rules are on, but "tailwindcss" cannot be ` +
-        `resolved from "${process.cwd()}". The plugin reads your theme through the installed ` +
-        `Tailwind, and given none it disables every rule, so the linting you asked for would ` +
-        `silently not happen. Add "tailwindcss" to your devDependencies (a transitive copy ` +
-        `carried by @nuxt/ui and friends is not enough, pnpm keeps it unlinked), or pass ` +
-        `"tailwind: false" to switch the rules off.`,
-    )
+  const settings: Record<string, string> = { cwd: install.resolveFrom }
+  for (const [key, value] of Object.entries({ entryPoint, tailwindConfig })) {
+    if (value !== undefined) {
+      settings[key] = path.resolve(process.cwd(), value)
+    }
   }
 
   /*
