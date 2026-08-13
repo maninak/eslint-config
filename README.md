@@ -92,6 +92,8 @@ Add the following to your `package.json` for local and CI invocation:
 
 > _`--cache-strategy content` keys the cache on file **content** rather than the default mtime+size. It costs a cheap hash per file but the cache then survives changes that do not touch content: a `git checkout`, a branch switch, a fresh `git worktree`, or a format-on-save no-op. Without it, any of those invalidates the whole cache and the next run is a cold, full re-lint._
 
+> _`--concurrency=auto` splits the run across worker threads, and each worker loads the config separately (~1.7s each). It pays off only where per-file work exceeds that: a ~3,000-file type-aware codebase went from 109s to 82s, a small repo is a wash, and 400 files carrying no type information got slower (4.9s serial against 6.5s). Keep the flag on a large or type-aware repo, drop it on a small one, and leave it out of `lint-staged`, which runs on a few files where worker startup is pure overhead._
+
 ### 4. VS Code Support
 
 Install the [VS Code ESLint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) and the [EditorConfig extension](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig).

@@ -123,3 +123,46 @@ describe('peer declarations match what the bundled plugins demand', () => {
     }
   })
 })
+
+/*
+ * Lazy-plugin guard.
+ *
+ * A static import is evaluated the moment the config module loads, so every consumer pays for
+ * it whether or not the blocks using it are ever built. These three plugins serve one
+ * framework each and cost ~380ms together, and a config load happens once per lint worker
+ * (ESLint spawns one per core under `--concurrency`), so loading them eagerly charges a plain
+ * TypeScript repo for Vue and Tailwind support it never receives.
+ *
+ * The invariant: the compiled output may reference them only through a dynamic `import()`,
+ * reached inside the branch that actually needs them. This is asserted against the bundle
+ * rather than at runtime because a static import has no observable runtime signature beyond
+ * timing, whereas here it is exact.
+ */
+describe('framework-specific plugins are loaded lazily, not at config-module load', () => {
+  const LAZY_PLUGINS = [
+    'eslint-plugin-vue-scoped-css',
+    'eslint-plugin-prettier-vue',
+    'eslint-plugin-better-tailwindcss',
+  ] as const
+  const distFiles = ['dist/index.js', 'dist/index.cjs'] as const
+
+  for (const distFile of distFiles) {
+    for (const plugin of LAZY_PLUGINS) {
+      it(`${distFile} reaches ${plugin} only through a dynamic import`, () => {
+        const source = readFileSync(distFile, 'utf-8')
+
+        expect(source, `${plugin} is missing from ${distFile} entirely`).toContain(
+          `import("${plugin}")`,
+        )
+
+        expect(source, `${plugin} is statically required in ${distFile}`).not.toContain(
+          `require("${plugin}")`,
+        )
+
+        expect(source, `${plugin} is statically imported in ${distFile}`).not.toContain(
+          `from "${plugin}"`,
+        )
+      })
+    }
+  }
+})

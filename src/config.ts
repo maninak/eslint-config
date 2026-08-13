@@ -20,11 +20,8 @@ import {
 } from '@antfu/eslint-config'
 import pluginStylistic from '@stylistic/eslint-plugin'
 import configPrettier from 'eslint-config-prettier'
-import pluginBetterTailwind from 'eslint-plugin-better-tailwindcss'
 import pluginJasmine from 'eslint-plugin-jasmine'
 import pluginPrettier from 'eslint-plugin-prettier'
-import pluginPrettierVue from 'eslint-plugin-prettier-vue'
-import pluginVueScopedCss from 'eslint-plugin-vue-scoped-css'
 import compactReturn from './rules/compact-return.js'
 import jsdocMaxLen from './rules/jsdoc-max-len.js'
 import jsdocOneline from './rules/jsdoc-oneline.js'
@@ -126,8 +123,20 @@ const prettierConfig: PrettierConfig = {
  * time, which works fine in real consumer setups but breaks tests that run multiple specs
  * under different cwds.
  */
-export default function buildConfig() {
+export default async function buildConfig() {
   const resolvedVueVersion = getConsumerVueVersion()
+  const hasVue = isInConsumerDeps('vue')
+  /*
+   * Loaded only for a consumer that has Vue, because these two cost ~290ms to import and a
+   * repo without Vue never gets the blocks below that use them. Each unwrap mirrors exactly
+   * what the static default import it replaced produced, so the blocks are unchanged.
+   */
+  const pluginVueScopedCss = hasVue
+    ? interopDefault(await import('eslint-plugin-vue-scoped-css'))
+    : undefined
+  const pluginPrettierVue = hasVue
+    ? interopDefault(interopDefault(await import('eslint-plugin-prettier-vue')))
+    : undefined
 
   return [
     {
@@ -614,7 +623,7 @@ export default function buildConfig() {
      * Rules for Vue single-file components
      * ========================================================================================
      */
-    ...(isInConsumerDeps('vue')
+    ...(hasVue
       ? ([
           ...(pluginVueScopedCss.configs.recommended as TypedFlatConfigItem[]),
           {
@@ -631,12 +640,12 @@ export default function buildConfig() {
           },
         ] satisfies TypedFlatConfigItem[])
       : []),
-    ...(isInConsumerDeps('vue')
+    ...(hasVue
       ? ([
           {
             name: 'maninak/prettier-vue',
             files: [GLOB_VUE],
-            plugins: { 'prettier-vue': interopDefault(pluginPrettierVue) },
+            plugins: { 'prettier-vue': pluginPrettierVue },
             rules: {
               ...prettierRulesFixingConflictsWithEslint,
               'prettier-vue/prettier': ['warn', prettierConfig],
@@ -836,7 +845,9 @@ export interface TailwindOptions {
  *
  * @param options Where the project's Tailwind theme lives. See {@link TailwindOptions}.
  */
-export function buildTailwindBlocks(options: TailwindOptions): TypedFlatConfigItem[] {
+export async function buildTailwindBlocks(
+  options: TailwindOptions,
+): Promise<TypedFlatConfigItem[]> {
   const { entryPoint, tailwindConfig } = options
   if (!entryPoint && !tailwindConfig) {
     throw new Error(
@@ -879,8 +890,15 @@ export function buildTailwindBlocks(options: TailwindOptions): TypedFlatConfigIt
     )
   }
 
-  const recommended = interopDefault(pluginBetterTailwind).configs
-    .recommended as TypedFlatConfigItem
+  /*
+   * Imported here rather than at module scope so that only a consumer who actually switched
+   * the Tailwind rules on pays the ~93ms it costs to load. Deliberately after the checks
+   * above, so a misconfigured path still fails fast without loading anything.
+   */
+  const pluginBetterTailwind = interopDefault(
+    interopDefault(await import('eslint-plugin-better-tailwindcss')),
+  )
+  const recommended = pluginBetterTailwind.configs.recommended as TypedFlatConfigItem
 
   /*
    * The plugin's `recommended` set carries no `files`, so ESLint would apply it to every file

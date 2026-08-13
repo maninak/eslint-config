@@ -226,8 +226,8 @@ export async function maninak(
     filenameCase === false
       ? []
       : buildFilenameCaseBlocks(filenameCase === true ? {} : filenameCase)
-  const tailwindBlocks = resolveTailwindBlocks(tailwind)
-  const [maninakOptions, ...maninakConfig] = buildConfig()
+  const tailwindBlocks = await resolveTailwindBlocks(tailwind)
+  const [maninakOptions, ...maninakConfig] = await buildConfig()
   const nuxtConfigs = isInConsumerDeps('nuxt') ? await getNuxtConfigs() : []
   const frameworkDefaults = {
     vue: isInConsumerDeps('vue') || isInConsumerDeps('nuxt'),
@@ -299,14 +299,14 @@ export async function maninak(
  * `@nuxt/ui` and never declared `tailwindcss`, so nothing ever switched the rules on and
  * nothing ever said why.
  */
-function resolveTailwindBlocks(
+async function resolveTailwindBlocks(
   option: false | TailwindOptions | undefined,
-): TypedFlatConfigItem[] {
+): Promise<TypedFlatConfigItem[]> {
   if (option === false) {
     return []
   }
   if (option) {
-    return buildTailwindBlocks(option)
+    return await buildTailwindBlocks(option)
   }
 
   if (isTailwindInConsumerDeps()) {
