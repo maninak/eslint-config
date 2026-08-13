@@ -1030,6 +1030,71 @@ describe('tailwindcss rules are registered on .vue files when tailwindcss is a d
   })
 })
 
+describe('unicorn rules reach .vue files', () => {
+  /*
+   * antfu v9.3 scoped its unicorn block to a JS/TS glob, which silently stopped 14 rules
+   * reaching SFCs, where a Vue or Nuxt consumer keeps most of its code. The preset mirrors
+   * that block onto `.vue`, so this asserts the rules actually run there.
+   */
+  it('unicorn/error-message fires on a message-less Error thrown inside an SFC', async () => {
+    const results = await callAtDir(
+      'test/fixtures/vue-project',
+      async () => await lint('UnicornRules.vue'),
+    )
+
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'unicorn/error-message' }),
+    )
+  })
+
+  it('keeps prettier-vue winning over the mirrored block for formatting rules', async () => {
+    // The mirror is inserted directly after antfu's unicorn block so every later block still
+    // overrides it. antfu sets `unicorn/number-literal-case` to error and
+    // `maninak/prettier-vue` turns it off for SFCs; appending the mirror at the end instead
+    // would resurrect it and put it back in conflict with prettier.
+    const severity = await callAtDir(
+      'test/fixtures/vue-project',
+      async () => await resolveRule('Component.vue', 'unicorn/number-literal-case'),
+    )
+
+    expect(severity?.[0]).toBe('off')
+  })
+
+  it('keeps checking NaN in unicorn/prefer-number-properties', async () => {
+    // antfu 9.3 flipped `checkNaN` off; the global `isNaN` coerces, so this stays on.
+    const severity = await resolveRule('src/config.ts', 'unicorn/prefer-number-properties')
+
+    expect(severity?.[0]).not.toBe('off')
+    expect(severity?.[1]).toMatchObject({ checkNaN: true })
+  })
+})
+
+describe('a Nuxt consumer gets a usable config despite duplicate plugin registrations', () => {
+  /*
+   * antfu and @nuxt/eslint-config both register `ts` and `vue`. When their transitive plugin
+   * copies fail to dedupe, flat config throws `Cannot redefine plugin` on the first file
+   * linted, killing lint entirely for every Nuxt consumer.
+   */
+  it('resolves a config for a Nuxt sub-package file without throwing', async () => {
+    const severity = await callAtDir(
+      'test/fixtures/monorepo-vue',
+      async () => await resolveRule('packages/web/Component.vue', 'vue/no-dupe-keys'),
+    )
+
+    expect(severity).toBeDefined()
+  })
+
+  it("keeps Nuxt's own rules, so the blocks are not dropped wholesale", async () => {
+    const severity = await callAtDir(
+      'test/fixtures/monorepo-vue',
+      async () => await resolveRule('packages/web/Component.vue', 'nuxt/prefer-import-meta'),
+    )
+
+    expect(severity).toBeDefined()
+    expect(severity![0]).not.toBe('off')
+  })
+})
+
 describe('TOML files lint without prettier parse failures', () => {
   /*
    * Before excluding TOML from the prettier block, prettier had no parser for it and fell

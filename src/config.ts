@@ -330,6 +330,18 @@ export default function buildConfig() {
         'no-undef-init': 'warn',
 
         /*
+         * Rules from `eslint-plugin-unicorn` follow
+         * ====================================================================================
+         */
+        // antfu 9.3 flipped `checkNaN` off. The global `isNaN` coerces first, so
+        // `isNaN('foo')` is true while `Number.isNaN('foo')` is false. Restored at
+        // antfu's pre-9.3 severity.
+        'unicorn/prefer-number-properties': [
+          'error',
+          { checkInfinity: false, checkNaN: true },
+        ],
+
+        /*
          * Rules from `perfectionist` follow
          * ====================================================================================
          */
