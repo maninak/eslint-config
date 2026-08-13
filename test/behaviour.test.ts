@@ -1030,6 +1030,39 @@ describe('tailwindcss rules are registered on .vue files when tailwindcss is a d
   })
 })
 
+describe('error-handling rules from newer eslint cores', () => {
+  /*
+   * `@nuxt/eslint-config` turns both on, so before this they applied to Nuxt consumers only
+   * and silently skipped every other project. Both need an eslint newer than the preset's
+   * old `^9.10.0` peer floor, which is why that floor moved to `^9.35.0`.
+   */
+  const fixture = 'test/fixtures/error-handling.ts'
+
+  it('no-unassigned-vars flags a let that is read but never assigned', async () => {
+    const results = await lint(fixture)
+
+    expect(results).toContainEqual(expect.objectContaining({ ruleId: 'no-unassigned-vars' }))
+  })
+
+  it('preserve-caught-error flags a re-throw that drops the caught error', async () => {
+    const results = await lint(fixture)
+
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'preserve-caught-error' }),
+    )
+  })
+
+  it('allows a deliberate bare catch, since requireCatchParameter stays off', async () => {
+    // `no-empty` already permits `catch {}`; requiring a parameter would contradict it. The
+    // fixture holds exactly one bare catch, so only the re-throw above may be reported.
+    const results = await lint(fixture)
+    const reported = results.filter((finding) => finding.ruleId === 'preserve-caught-error')
+
+    expect(reported).toHaveLength(1)
+    expect(reported[0]?.line).toBe(16)
+  })
+})
+
 describe('unicorn rules reach .vue files', () => {
   /*
    * antfu v9.3 scoped its unicorn block to a JS/TS glob, which silently stopped 14 rules

@@ -328,6 +328,13 @@ export default function buildConfig() {
         'no-multiple-empty-lines': ['warn', { max: 1, maxBOF: 0, maxEOF: 1 }],
         'no-useless-return': 'warn',
         'no-undef-init': 'warn',
+        // A `let` that is read but never assigned is always undefined, so every read is a bug.
+        // Needs eslint >= 9.27.
+        'no-unassigned-vars': 'error',
+        // Re-throwing without `cause` drops the original error and the stack behind it, which
+        // is exactly the context needed to diagnose the failure. Needs eslint >= 9.35.
+        // `requireCatchParameter` stays off so a deliberate `catch {}` is still allowed.
+        'preserve-caught-error': ['error', { requireCatchParameter: false }],
 
         /*
          * Rules from `eslint-plugin-unicorn` follow
