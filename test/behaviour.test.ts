@@ -770,6 +770,33 @@ describe('markdown prose is soft-wrapped', () => {
   })
 })
 
+describe('ts/switch-exhaustiveness-check counts a default clause as no coverage', () => {
+  /*
+   * A `switch` over a discriminated union must name every member, otherwise adding a variant
+   * compiles clean everywhere it is dispatched on and the new case silently takes whatever
+   * the `default:` does. typescript-eslint's `considerDefaultExhaustiveForUnions` decides
+   * whether a `default:` counts as covering the missing member; the version this preset pins
+   * defaults it to `false`, which is the behaviour worth having. This test exists so a bump
+   * that flips that default back is reported here rather than discovered as a shipped bug.
+   */
+  const fixturePath = 'test/fixtures/switch-exhaustiveness.ts'
+
+  it('reports the missing union member even when a default clause is present', async () => {
+    const results = await lint(fixturePath, tsOptions)
+    const findings = results.filter(
+      (finding) => finding.ruleId === 'ts/switch-exhaustiveness-check',
+    )
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        line: 12,
+        message: 'Switch is not exhaustive. Cases not matched: "triangle"',
+      }),
+      expect.objectContaining({ line: 23 }),
+    ])
+  })
+})
+
 describe('maninak/jsdoc-oneline', () => {
   const fixturePath = 'test/fixtures/jsdoc-oneline.ts'
   const ruleId = 'maninak/jsdoc-oneline'
