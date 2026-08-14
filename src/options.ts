@@ -11,17 +11,12 @@ import type { TypescriptOption } from './features/type-aware.js'
 /** Maninak-specific options layered on top of antfu's. All optional. */
 export interface ManinakExtraOptions {
   /**
-   * Require a JSDoc block on `export`ed functions, classes, and methods. `@param` and
-   * `@returns` tags stay optional; a free-text description alone is enough of a contract.
+   * Require a JSDoc block on `export`ed functions, classes and methods. A free-text
+   * description alone satisfies it; `@param` and `@returns` stay optional.
    *
-   * `true` enforces it in folders that conventionally hold reusable utilities (`utils/`,
-   * `util/`, `lib/`, `helpers/`, and the same names as single files). Pass an object to name
-   * your own globs or loosen the rule; see {@link RequireJsdocOptions}.
-   *
-   * Test files e.g. `*.test.*`, `*.spec.*`, anything under `test/`, are always exempt, even
-   * when they match a glob you passed yourself.
-   *
-   * Default: `false`. Off by default to keep the preset lower friction.
+   * `true` enforces it under the conventional utility folders (`utils/`, `lib/`, `helpers/`
+   * and friends). Test files are always exempt. See {@link RequireJsdocOptions} to name your
+   * own globs. Default `false`.
    */
   requireJsdoc?: boolean | RequireJsdocOptions
 
@@ -32,37 +27,23 @@ export interface ManinakExtraOptions {
   requireJsdocInUtils?: boolean
 
   /**
-   * Enforce a filename casing convention: camelCase for `.ts`/`.js` modules, PascalCase for
-   * `.vue` components. Pass an object to change either casing or to exempt more paths; see
-   * {@link FilenameCaseOptions}.
+   * Enforce a filename casing convention: camelCase for `.ts`/`.js`, PascalCase for `.vue`.
+   * Vue and Nuxt routing paths are exempt automatically. See {@link FilenameCaseOptions}.
    *
-   * When `vue` or `nuxt` is a consumer dependency, paths whose filename is load-bearing under
-   * file-based routing are exempt automatically (`pages/`, `layouts/`, `middleware/`,
-   * `server/`, `app.vue`, `error.vue`, `*.config.*`, and dynamic segments like `[id].vue`),
-   * because renaming one of those changes a route or breaks the framework.
-   *
-   * The rule reports without fixing: renaming a file on disk would break every import of it.
-   *
-   * Default: `false`. Turning it on in an existing repo reports every file that disagrees at
-   * once, and each fix is a manual `git mv`.
+   * Reports without fixing, since renaming a file would break every import of it. Default
+   * `false`: turning it on in an existing repo reports every disagreeing file at once, and
+   * each fix is a manual `git mv`.
    */
   filenameCase?: boolean | FilenameCaseOptions
 
   /**
-   * Where the Tailwind CSS rules should read your theme from: `entryPoint` for a Tailwind v4
-   * CSS entry point, `tailwindConfig` for a v3 config. See {@link TailwindOptions}.
+   * Where the Tailwind rules read your theme from: `entryPoint` for a v4 CSS entry point,
+   * `tailwindConfig` for a v3 config. See {@link TailwindOptions}. `false` switches them off.
    *
-   * You should not normally need it. The rules come on by themselves when Tailwind is in the
-   * workspace (including via `@nuxt/ui`, which carries Tailwind v4 without declaring it) and
-   * the preset can find your theme: the one CSS file that does `@import "tailwindcss"` on v4,
-   * or `tailwind.config.js` on v3. A Tailwind that only a dependency installed is found too,
-   * so nothing has to be added to your `package.json` to make this work.
-   *
-   * Nothing is ever guessed, though. The plugin learns the project's theme from that file, and
-   * given none it falls back to Tailwind's stock theme: it would enforce a class order the
-   * project never configured and treat every themed class as unknown. So when a repo has
-   * several files that could be the theme, or none, the rules stay off and the preset says
-   * which it was. That is what this option settles. Pass `false` to switch the rules off.
+   * You should not normally need it. The rules come on by themselves once the preset finds
+   * both Tailwind in your workspace and exactly one theme file. Reach for this only when it
+   * reports that several files could be the theme, or that none is, since guessing would
+   * enforce a class order the project never configured.
    *
    * @example
    * ```ts
@@ -72,18 +53,12 @@ export interface ManinakExtraOptions {
   tailwind?: false | TailwindOptions
 
   /**
-   * Lints your `.css` files, which nothing else in this preset looks at.
+   * Lints your `.css` files, which nothing else in this preset looks at: a misspelled
+   * property, a value no property accepts, a duplicate `@import`, a malformed
+   * `grid-template-areas`. Taught the Tailwind dialect where the project uses it.
    *
-   * On by default wherever the project has any CSS at all, since the rules catch real defects
-   * rather than style opinions: a misspelled property, a value no property accepts, a
-   * duplicated `@import` or keyframe selector, an unmatchable selector, a malformed
-   * `grid-template-areas`. When this project uses Tailwind, the parser is taught the Tailwind
-   * dialect, so `@theme`, `@utility`, `@apply` and `@custom-variant` read as the CSS they are.
-   *
-   * Coverage is standalone `.css` files. `@eslint/css` has no way to reach an SFC's `<style>`
-   * block, which stays the province of `eslint-plugin-vue-scoped-css`.
-   *
-   * Pass `false` to switch the rules off.
+   * On by default wherever the project has any CSS, `false` to switch it off. Coverage is
+   * standalone `.css`; SFC `<style>` blocks stay with `eslint-plugin-vue-scoped-css`.
    *
    * @example
    * ```ts
@@ -95,11 +70,10 @@ export interface ManinakExtraOptions {
   /**
    * Extend the preset's import ordering with your own groups, without restating the ordering.
    *
-   * ESLint replaces a rule's options rather than merging them, so adding one custom group by
-   * hand means copying the preset's whole `groups` array plus `internalPattern`, `order`,
-   * `type` and the newline keys, and that copy stops tracking this preset the moment any of
-   * them changes. Each entry here says only what it is and where it goes; everything else
-   * stays owned by the preset. See {@link SortImportsOptions}.
+   * ESLint replaces a rule's options rather than merging them, so adding one group by hand
+   * means copying the preset's entire ordering, and that copy stops tracking this preset the
+   * moment any of it changes. Each entry here says only what it is and where it goes. See
+   * {@link SortImportsOptions}.
    *
    * @example
    * ```ts
@@ -117,24 +91,16 @@ export interface ManinakExtraOptions {
   sortImports?: SortImportsOptions
 
   /**
-   * Extends type-aware linting to `.vue` single-file components, so rules needing type
-   * information (`ts/no-unsafe-*`, `ts/no-misused-promises`,
-   * `ts/restrict-template-expressions`, and the rest) run inside SFCs instead of stopping at
-   * the `.vue` boundary.
+   * Extends type-aware linting into `.vue` SFCs, so `ts/no-unsafe-*` and the other rules
+   * needing type information stop skipping the files holding most of a Vue app's code.
    *
-   * Default: `true`, but only where all three preconditions hold, each detected rather than
-   * assumed. Vue support must be on. Type-aware linting must already be active, meaning a
-   * resolved `tsconfig.json` (see `typescript.tsconfigPath`), so a repo that never opted into
-   * type-aware linting is untouched by this. And that tsconfig's `include` must cover `.vue`:
-   * one that excludes them makes every SFC report "not found in project" instead of linting.
+   * Default `true`, but only where three detected preconditions hold: Vue support is on, a
+   * `tsconfig.json` resolved, and that tsconfig's `include` covers `.vue`. When one fails the
+   * preset warns once and leaves SFCs as they were. Setting `true` by hand asks explicitly,
+   * and then an unmet precondition is a hard error instead.
    *
-   * When a precondition fails, the default degrades: the preset says so once and leaves SFCs
-   * linted as before, rather than failing a lint nobody asked it to fail. Setting this to
-   * `true` by hand asks for it explicitly instead, and then an unmet precondition is a hard
-   * error, since silently not doing what you asked for is the worse answer.
-   *
-   * Set `false` to switch it off. That is the lever to reach for on lint time: type-checking
-   * SFC script blocks is the expensive part of a Vue lint.
+   * `false` switches it off, which is the lever to reach for on lint time: type-checking SFC
+   * script blocks is the expensive part of a Vue lint.
    */
   vueTypeAware?: boolean
 }
