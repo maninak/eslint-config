@@ -1,0 +1,7 @@
+/* `@custom-media` is postcss-preset-env, not standard CSS. The stock parser rejects it
+   outright, which in strict mode costs the whole file. */
+@custom-media --sm (min-width: 40rem);
+
+.card {
+  colr: red;
+}

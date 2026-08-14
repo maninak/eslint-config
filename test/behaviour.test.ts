@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  detectTailwindCssDialect,
   detectTailwindTheme,
   findTailwindInstall,
   resolveTailwindInstall,
@@ -1885,6 +1886,191 @@ describe('tailwind rules find the project entry point for themselves', () => {
     } finally {
       rmSync(root, { force: true, recursive: true })
     }
+  })
+})
+
+describe('css files are linted, which nothing in this preset did before', () => {
+  /*
+   * CSS was previously matched by no config at all: not linted, not formatted. These rules
+   * catch real defects rather than style opinions, so they are on wherever a project has CSS.
+   */
+  const cssFixture = 'test/fixtures/css-project'
+
+  it('reports the defects no other tool in this preset can see', async () => {
+    const results = await callAtDir(cssFixture, async () => await lint('styles.css'))
+    const found = results.map((finding) => finding.ruleId)
+
+    expect(found).toEqual(
+      expect.arrayContaining([
+        'css/no-duplicate-imports',
+        'css/no-empty-blocks',
+        'css/no-invalid-properties',
+        'css/no-duplicate-keyframe-selectors',
+        'css/no-invalid-named-grid-areas',
+      ]),
+    )
+  })
+
+  it('reports rather than blocks, like every other rule here', async () => {
+    const results = await callAtDir(cssFixture, async () => await lint('styles.css'))
+
+    expect(results.every((finding) => finding.severity === 1)).toBe(true)
+  })
+
+  /*
+   * A flat-config block with no `files` key claims every file that gets linted, and antfu
+   * ships about ten of them. On a CSS file those JS rules do not merely fail to match: core
+   * rules reach for `sourceCode.getAllComments`, which the CSS language has no such thing
+   * as, and throw while loading. `no-irregular-whitespace` alone took down the whole lint.
+   */
+  it('keeps the javascript rules off css, which used to crash the lint', async () => {
+    const [core, prettier] = await callAtDir(cssFixture, async () => [
+      await resolveRule('styles.css', 'no-irregular-whitespace'),
+      await resolveRule('styles.css', 'prettier/prettier'),
+    ])
+
+    expect(core).toBeUndefined()
+    expect(prettier).toBeUndefined()
+  })
+
+  /*
+   * These rules are on by default, so an unfamiliar stylesheet must not cost the consumer
+   * their lint. A CSS file run through PostCSS plugins is ordinary in a real project and its
+   * syntax is unknown here: in strict mode `@custom-media` alone is a fatal parse error that
+   * reports nothing else in the file.
+   */
+  it('keeps linting a stylesheet whose syntax it does not fully know', async () => {
+    const results = await callAtDir(
+      'test/fixtures/css-postcss',
+      async () => await lint('custom-media.css'),
+    )
+
+    expect(results.filter((finding) => finding.ruleId === null)).toEqual([])
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'css/no-invalid-properties' }),
+    )
+  })
+
+  it('stays out of the way entirely when asked', async () => {
+    const severity = await callAtDir(
+      cssFixture,
+      async () => await resolveRule('styles.css', 'css/no-empty-blocks', { css: false }),
+    )
+
+    expect(severity).toBeUndefined()
+  })
+
+  it('loads nothing for a project that has no css at all', async () => {
+    const configs = await callAtDir('test/fixtures/css-none', async () => await maninak())
+
+    expect(configs.find((config) => config.name === 'maninak/css')).toBeUndefined()
+  })
+
+  it('holds use-baseline to widely available features by default', async () => {
+    const results = await callAtDir(cssFixture, async () => await lint('styles.css'))
+
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'css/use-baseline', line: 18 }),
+    )
+  })
+
+  it('lets an app targeting current browsers ask for the newer baseline', async () => {
+    const results = await callAtDir(
+      cssFixture,
+      async () => await lint('styles.css', { css: { available: 'newly' } }),
+    )
+
+    expect(results.filter((finding) => finding.ruleId === 'css/use-baseline')).toEqual([])
+  })
+})
+
+describe('css linting understands tailwind, whose at-rules are not css', () => {
+  /*
+   * The stock parser does not skip Tailwind's at-rules, it rejects them: a v4 entry point dies
+   * on `@custom-variant dark (&:where(.dark, .dark *))` at parse time and reports nothing else
+   * in the file. The dialect is picked from what the stylesheet contains, not from whether
+   * `tailwindcss` resolves, since a repo can have the syntax without a loadable package.
+   */
+  const fixture = 'test/fixtures/css-tailwind'
+
+  /*
+   * A project outside any node_modules tree, declaring nothing and resolving nothing, whose
+   * stylesheet is nonetheless unmistakably Tailwind v4. Everything except the file's own
+   * contents says "no Tailwind here", and handing that file the stock grammar is a parse
+   * failure rather than a missed rule.
+   */
+  it('reads the dialect off the stylesheets, not off what is installed', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'maninak-dialect-'))
+
+    try {
+      writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'no-deps' }))
+      writeFileSync(path.join(root, 'main.css'), '@import "tailwindcss";\n')
+
+      const dialect = await callAtDir(
+        root,
+        async () => await Promise.resolve(detectTailwindCssDialect()),
+      )
+
+      expect(dialect).toBe('tailwind4')
+    } finally {
+      rmSync(root, { force: true, recursive: true })
+    }
+  })
+
+  it('leaves plain css on the stock grammar', async () => {
+    const dialect = await callAtDir(
+      'test/fixtures/css-project',
+      async () => await Promise.resolve(detectTailwindCssDialect()),
+    )
+
+    expect(dialect).toBeUndefined()
+  })
+
+  it('hands the parser the tailwind grammar, and plain css none', async () => {
+    async function syntaxOf(dir: string): Promise<unknown> {
+      const configs = await callAtDir(dir, async () => await maninak({ tailwind: false }))
+      const block = configs.find((config) => config.name === 'maninak/css')
+
+      return (block?.languageOptions as { customSyntax?: unknown } | undefined)?.customSyntax
+    }
+
+    expect(await syntaxOf(fixture)).toBeDefined()
+    expect(await syntaxOf('test/fixtures/css-project')).toBeUndefined()
+  })
+
+  it('lints a v4 entry point instead of dying on it', async () => {
+    const results = await callAtDir(
+      fixture,
+      async () => await lint('main.css', { tailwind: false }),
+    )
+
+    expect(results.filter((finding) => finding.ruleId === null)).toEqual([])
+    expect(results).toContainEqual(expect.objectContaining({ ruleId: 'css/no-important' }))
+  })
+
+  /*
+   * `tailwind-csstree` parses `@utility` but carries no descriptor table for its body, so
+   * `no-invalid-at-rules` calls every declaration inside one an unknown descriptor. That is
+   * the rule being wrong about every custom utility a project defines.
+   */
+  it('does not call a custom utility invalid', async () => {
+    const results = await callAtDir(
+      fixture,
+      async () => await lint('main.css', { tailwind: false }),
+    )
+
+    expect(results.filter((finding) => finding.ruleId === 'css/no-invalid-at-rules')).toEqual(
+      [],
+    )
+  })
+
+  it('keeps that rule on for a project that writes plain css', async () => {
+    const severity = await callAtDir(
+      'test/fixtures/css-project',
+      async () => await resolveRule('styles.css', 'css/no-invalid-at-rules'),
+    )
+
+    expect(severity?.[0]).toBe('warn')
   })
 })
 

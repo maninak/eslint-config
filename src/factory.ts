@@ -4,21 +4,25 @@ import type {
   TypedFlatConfigItem,
 } from '@antfu/eslint-config'
 import type {
+  CssOptions,
   FilenameCaseOptions,
   RequireJsdocOptions,
   SortImportsOptions,
   TailwindOptions,
 } from './config.js'
 import path from 'node:path'
-import antfu, { GLOB_TS, GLOB_TSX, GLOB_VUE } from '@antfu/eslint-config'
+import antfu, { GLOB_CSS, GLOB_TS, GLOB_TSX, GLOB_VUE } from '@antfu/eslint-config'
 import { glob } from 'tinyglobby'
 import { merge } from 'ts-deepmerge'
 import buildConfig, {
+  buildCssBlocks,
   buildFilenameCaseBlocks,
   buildRequireJsdocBlocks,
   buildSortImportsBlock,
   buildTailwindBlocks,
+  detectTailwindCssDialect,
   detectTailwindTheme,
+  findProjectCssFiles,
   findTailwindThemeProblem,
   isTailwindInConsumerDeps,
   resolveTailwindInstall,
@@ -87,6 +91,27 @@ export interface ManinakExtraOptions {
    * ```
    */
   tailwind?: false | TailwindOptions
+
+  /**
+   * Lints your `.css` files, which nothing else in this preset looks at.
+   *
+   * On by default wherever the project has any CSS at all, since the rules catch real defects
+   * rather than style opinions: a misspelled property, a value no property accepts, a
+   * duplicated `@import` or keyframe selector, an unmatchable selector, a malformed
+   * `grid-template-areas`. When this project uses Tailwind, the parser is taught the Tailwind
+   * dialect, so `@theme`, `@utility`, `@apply` and `@custom-variant` read as the CSS they are.
+   *
+   * Coverage is standalone `.css` files. `@eslint/css` has no way to reach an SFC's `<style>`
+   * block, which stays the province of `eslint-plugin-vue-scoped-css`.
+   *
+   * Pass `false` to switch the rules off.
+   *
+   * @example
+   * ```ts
+   * css: { available: 'newly' }, // an app targeting current browsers
+   * ```
+   */
+  css?: boolean | CssOptions
 
   /**
    * Extend the preset's import ordering with your own groups, without restating the ordering.
@@ -229,6 +254,7 @@ export async function maninak(
     requireJsdocInUtils = false,
     vueTypeAware = true,
     tailwind,
+    css,
     ...antfuOptions
   } = options
   /*
@@ -244,6 +270,7 @@ export async function maninak(
       ? []
       : buildFilenameCaseBlocks(filenameCase === true ? {} : filenameCase)
   const tailwindBlocks = await resolveTailwindBlocks(tailwind)
+  const cssBlocks = await resolveCssBlocks(css)
   const [maninakOptions, ...maninakConfig] = await buildConfig()
   const nuxtConfigs = isInConsumerDeps('nuxt') ? await getNuxtConfigs() : []
   const frameworkDefaults = {
@@ -305,6 +332,7 @@ export async function maninak(
     ...jsdocBlocks,
     ...filenameCaseBlocks,
     ...tailwindBlocks,
+    ...cssBlocks,
     ...sortImportsBlocks,
     ...nuxtConfigs,
     ...userConfigs,
@@ -312,6 +340,9 @@ export async function maninak(
 
   dedupePluginRegistrations(configs)
   restoreUnicornRulesOnVue(configs)
+  if (cssBlocks.length > 0) {
+    keepJavascriptBlocksOffCss(configs)
+  }
 
   // Runs before the legacy switch below so both passes agree on which project mode is active.
   if (typeAwareVue && typeAwareTsconfig !== undefined) {
@@ -323,6 +354,30 @@ export async function maninak(
   }
 
   return configs
+}
+
+/**
+ * The CSS blocks, or none when this project has no CSS to lint.
+ *
+ * Gated on the project actually owning a `.css` file rather than switched on unconditionally,
+ * because loading the language plugin costs ~73ms and a repo with no CSS would pay it on every
+ * lint for nothing. The scan behind that answer is shared with the Tailwind theme detection,
+ * so asking costs nothing extra.
+ */
+async function resolveCssBlocks(
+  option: boolean | CssOptions | undefined,
+): Promise<TypedFlatConfigItem[]> {
+  if (option === false) {
+    return []
+  }
+  if (option === undefined && findProjectCssFiles(process.cwd()).length === 0) {
+    return []
+  }
+
+  return await buildCssBlocks(
+    option === true || option === undefined ? {} : option,
+    detectTailwindCssDialect(),
+  )
 }
 
 /**
@@ -590,6 +645,34 @@ async function findVueTypeAwareProblem(tsconfigPath: string): Promise<string | u
     `linting. Add "**/*.vue" to that tsconfig's "include", or point typescript.tsconfigPath ` +
     `at one that covers SFCs (Nuxt generates .nuxt/tsconfig.json).`
   )
+}
+
+/**
+ * Stops the JavaScript-shaped config blocks claiming `.css` files.
+ *
+ * A flat-config block with no `files` key applies to every file that gets linted, and antfu
+ * ships about ten of them carrying some 200 JS rules between them. That is harmless while the
+ * only extra languages are JSON, YAML and TOML, whose parsers produce an ESTree-shaped AST the
+ * rules simply never match against. CSS is not parsed, it is a LANGUAGE, and its `SourceCode`
+ * has no `getAllComments`: core rules do not fail to match on it, they throw while loading, so
+ * `no-irregular-whitespace` alone takes down the lint of any CSS file. Verified before and
+ * after.
+ *
+ * Blocks that already scope themselves with `files` are left alone, and so is a bare
+ * global-ignore entry, where adding to `ignores` would exclude CSS from the lint entirely
+ * rather than from one block.
+ */
+function keepJavascriptBlocksOffCss(configs: TypedFlatConfigItem[]): void {
+  for (const config of configs) {
+    if (config.files) {
+      continue
+    }
+    const keys = Object.keys(config).filter((key) => key !== 'name')
+    if (keys.length === 1 && keys[0] === 'ignores') {
+      continue
+    }
+    config.ignores = [...(config.ignores ?? []), GLOB_CSS]
+  }
 }
 
 /** Name of the antfu block that parses `.vue`, which needs a project to resolve types. */

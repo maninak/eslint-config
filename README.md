@@ -34,6 +34,26 @@ An opinionated, holistic lint-and-format suite designed to have your back, clean
 | Markdown                                                         | ✅     |
 | Test files (Vitest, Jest, Playwright, WDIO, Mocha, Jasmine, ...) | ✅     |
 | Tailwind CSS (v3 and v4, auto-detected, see below)               | ✅     |
+| CSS (see below)                                                  | ✅     |
+
+### CSS
+
+Your `.css` files were matched by no config at all before: not linted, not formatted. [`@eslint/css`](https://github.com/eslint/css) now lints them wherever the project has any CSS, catching things no other tool here can see: a misspelled property, a value no property accepts, a duplicated `@import` or keyframe selector, an unmatchable selector, a malformed `grid-template-areas`.
+
+Where this project uses Tailwind, the parser is taught the Tailwind dialect, so `@theme`, `@utility`, `@apply` and `@custom-variant` read as the CSS they are rather than as parse errors. Parsing is tolerant, so a stylesheet built for PostCSS plugins keeps linting instead of failing outright on syntax this parser has never heard of.
+
+```js
+export default maninak({
+  css: { available: 'newly' }, // an app targeting current browsers
+  // css: false,               // or switch the rules off
+})
+```
+
+`available` sets how new a feature may be before `css/use-baseline` objects. The default `'widely'` suits a site with a long browser tail; `'newly'` suits an app on current engines and stops the rule reporting things like `user-select` and `light-dark()`.
+
+Coverage is standalone `.css` only. `@eslint/css` parses a whole file as CSS and has no way to reach an SFC's `<style>` block, which stays with `eslint-plugin-vue-scoped-css`.
+
+Two rules are tuned rather than taken as shipped. `no-invalid-properties` allows unknown variables, since a stylesheet reading `var(--token)` cannot prove a token defined in another file exists. `no-invalid-at-rules` is off under Tailwind, because `tailwind-csstree` carries no descriptor table for a `@utility` body and would call every custom utility invalid.
 
 ### Tailwind CSS
 
