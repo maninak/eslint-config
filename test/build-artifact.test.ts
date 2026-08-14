@@ -36,7 +36,7 @@ describe('build artifact does not use FlatCompat (ESLint extension compatibility
         src = readFileSync(distFile, 'utf8')
       } catch {
         throw new Error(
-          `${distFile} not found — run \`pnpm build\` before \`pnpm test:build-artifact\``,
+          `${distFile} not found: run \`pnpm build\` before \`pnpm test:build-artifact\``,
         )
       }
 
@@ -245,5 +245,36 @@ describe('the README links to files that exist', () => {
 
   it('resolves every one of them', () => {
     expect(targets.filter((target) => !existsSync(target))).toEqual([])
+  })
+})
+
+/*
+ * Source-path guard for the repo docs.
+ *
+ * The docs name source files in backticks, and a rename leaves those names pointing at
+ * nothing.
+ * That is how CONTRIBUTING ended up describing `src/config.ts` for a while after it became
+ * `src/preset.ts`: nothing reads these strings, so nothing complained. Only paths rooted at a
+ * real source directory are checked, which keeps globs and consumer-side examples out.
+ */
+describe('the docs name source files that exist', () => {
+  // `.claude/` is untracked, so it is absent from a fresh clone and from CI. Checking it only
+  // where it exists keeps the guard useful locally without making the suite fail elsewhere;
+  // the two tracked docs carry enough paths that the assertion below cannot go vacuous.
+  const docs = ['README.md', 'CONTRIBUTING.md', '.claude/rules/authoring.md'].filter((doc) =>
+    existsSync(doc),
+  )
+  const mentions = docs.flatMap((doc) =>
+    [...readFileSync(doc, 'utf8').matchAll(/`((?:src|test|types|scripts)\/[\w./-]+)`/g)].map(
+      (match) => ({ doc, path: match[1]! }),
+    ),
+  )
+
+  it('finds paths to check, so the assertion below cannot pass vacuously', () => {
+    expect(mentions.length).toBeGreaterThan(0)
+  })
+
+  it('resolves every one of them', () => {
+    expect(mentions.filter((mention) => !existsSync(mention.path))).toEqual([])
   })
 })
