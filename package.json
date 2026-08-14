@@ -28,7 +28,7 @@
     "maninak"
   ],
   "engines": {
-    "node": "^18.18.0 || ^20.9.0 || >=21.1.0"
+    "node": "^20.19.0 || ^22.13.0 || >=24"
   },
   "files": [
     "dist",
@@ -92,7 +92,9 @@
     "@types/estree": "^1.0.0",
     "@types/node": "^26.2.0",
     "eslint-define-config": "link:@@antfu/eslint-define-config",
+    "lint-staged": "^17.3.0",
     "publint": "^0.3.23",
+    "simple-git-hooks": "^2.13.1",
     "tailwindcss": "^4.3.3",
     "tsup": "^8.0.0",
     "vitest": "^4.1.10"

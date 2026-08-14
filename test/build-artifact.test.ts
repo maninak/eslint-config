@@ -68,26 +68,33 @@ describe('peer declarations match what the bundled plugins demand', () => {
     dependencies: Record<string, string>
     peerDependencies: Record<string, string>
     peerDependenciesMeta?: Record<string, { optional?: boolean }>
+    engines: { node: string }
   }
 
   function readManifest(name: string): {
     peerDependencies?: Record<string, string>
+    engines?: { node?: string }
   } {
     return JSON.parse(readFileSync(`node_modules/${name}/package.json`, 'utf-8')) as {
       peerDependencies?: Record<string, string>
+      engines?: { node?: string }
     }
   }
 
-  /** The lowest version a range admits, e.g. `'^9.10.0 || ^10.0.0'` gives `[9, 10, 0]`. */
-  function readRangeFloor(range: string): number[] {
-    const versions = [...range.matchAll(/(\d+)\.(\d+)\.(\d+)/g)].map((match) =>
-      match.slice(1).map(Number),
-    )
-    versions.sort(
-      (left, right) => left[0]! - right[0]! || left[1]! - right[1]! || left[2]! - right[2]!,
+  /*
+   * The lowest version a range admits, as one comparable number. Minor and patch are optional
+   * because a dependency may spell its range `^9` or `>=10`: reading only full `x.y.z` triples
+   * made this guard throw a TypeError on such a range instead of reporting, which is a gate
+   * failing as a crash rather than as an answer.
+   */
+  function readRangeFloor(range: string): number {
+    const ranks = [...range.matchAll(/(\d+)(?:\.(\d+))?(?:\.(\d+))?/g)].map(
+      (match) => Number(match[1]) * 1e6 + Number(match[2] ?? 0) * 1e3 + Number(match[3] ?? 0),
     )
 
-    return versions[0]!
+    expect(ranks.length, `no version found in range "${range}"`).toBeGreaterThan(0)
+
+    return Math.min(...ranks)
   }
 
   it('asks for the same tailwindcss range the tailwind plugin does', () => {
@@ -114,14 +121,32 @@ describe('peer declarations match what the bundled plugins demand', () => {
       if (!required) {
         continue
       }
-      const theirFloor = readRangeFloor(required)
-      const ourRank = ourFloor[0]! * 1e6 + ourFloor[1]! * 1e3 + ourFloor[2]!
-      const theirRank = theirFloor[0]! * 1e6 + theirFloor[1]! * 1e3 + theirFloor[2]!
 
       expect(
-        ourRank,
-        `our eslint peer floor ${ourFloor.join('.')} is below what ${dep} needs (${required})`,
-      ).toBeGreaterThanOrEqual(theirRank)
+        ourFloor,
+        `our eslint peer floor is below what ${dep} needs (${required})`,
+      ).toBeGreaterThanOrEqual(readRangeFloor(required))
+    }
+  })
+
+  /*
+   * `engines.node` is a promise to the consumer's package manager, and it was three majors
+   * below what the bundled plugins declare: a Node 18 consumer installed cleanly and then hit
+   * an unsupported runtime the first time a dynamic plugin import ran.
+   */
+  it('claims a node floor no older than every bundled plugin needs', () => {
+    const ourFloor = readRangeFloor(own.engines.node)
+
+    for (const dep of Object.keys(own.dependencies)) {
+      const required = readManifest(dep).engines?.node
+      if (!required) {
+        continue
+      }
+
+      expect(
+        ourFloor,
+        `our engines.node floor is below what ${dep} needs (${required})`,
+      ).toBeGreaterThanOrEqual(readRangeFloor(required))
     }
   })
 })
@@ -201,4 +226,24 @@ describe('the published declarations resolve each other', () => {
       expect(missing).toEqual([])
     })
   }
+})
+
+/*
+ * README link guard.
+ *
+ * The README ships inside the published package, so a relative link that does not resolve is
+ * a 404 on both GitHub and npm. The licence link read `./LICENSE` for years while the file on
+ * disk is spelled `LICENCE`, and nothing here noticed.
+ */
+describe('the README links to files that exist', () => {
+  const readme = readFileSync('README.md', 'utf8')
+  const targets = [...readme.matchAll(/\]\((\.[^)#]*)\)/g)].map((match) => match[1]!)
+
+  it('finds relative links to check, so the assertion below cannot pass vacuously', () => {
+    expect(targets.length).toBeGreaterThan(0)
+  })
+
+  it('resolves every one of them', () => {
+    expect(targets.filter((target) => !existsSync(target))).toEqual([])
+  })
 })

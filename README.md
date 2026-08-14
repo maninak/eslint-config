@@ -213,9 +213,9 @@ Add the following to your `package.json`, alongside the `lint` script from step 
   "simple-git-hooks": {
     "pre-commit": "npx lint-staged",
   },
-  // No --cache here: lint-staged passes the few staged files, where a cache cannot pay off
+  // Same cache as step 3 on purpose: a pre-commit run then warms the cache the full run reads
   "lint-staged": {
-    "*": "eslint --fix --max-warnings 0 --no-warn-ignored",
+    "*": "eslint --fix --max-warnings 0 --no-warn-ignored --cache --cache-strategy content --cache-location node_modules/.cache/eslint",
   },
 }
 ```
@@ -520,4 +520,4 @@ Every bit, a kind message included, makes maintaining this and my other open-sou
 
 ## License
 
-[MIT](./LICENSE) License &copy; 2019-PRESENT [Kostis Maninakis](https://maninak.github.io)
+[MIT](./LICENCE) License &copy; 2019-PRESENT [Kostis Maninakis](https://maninak.github.io)
