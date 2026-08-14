@@ -5,7 +5,7 @@
  * stay quiet on the two documented ones.
  */
 
-// no jsdoc here — should trigger require-jsdoc
+// no jsdoc here, should trigger require-jsdoc
 export function undocumented(): string {
   return 'undocumented'
 }

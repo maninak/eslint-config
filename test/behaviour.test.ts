@@ -2,7 +2,6 @@ import type { LintResult } from './helpers.js'
 import {
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -18,7 +17,14 @@ import {
   resolveTailwindInstall,
 } from '../src/features/tailwind.js'
 import maninak from '../src/index.js'
-import { callAtDir, lint, lintAndFix, lintAndFixRule, resolveRule } from './helpers.js'
+import {
+  callAtDir,
+  createCaseHelpers,
+  lint,
+  lintAndFix,
+  lintAndFixRule,
+  resolveRule,
+} from './helpers.js'
 
 const tsFixturePath = 'test/fixtures/typescript.ts'
 const typeAwareFixturePath = 'test/fixtures/type-aware.ts'
@@ -223,31 +229,7 @@ describe('maninak/prefer-concise-async-arrow', () => {
   const fixturePath = 'test/fixtures/inline-callback.ts'
   const ruleId = 'maninak/prefer-concise-async-arrow'
 
-  function getCaseArea(caseName: string): { start: number; end: number } {
-    const lines = readFileSync(fixturePath, 'utf-8').split('\n')
-    const startIdx = lines.findIndex((ln) => ln.includes(`@case ${caseName}`))
-
-    if (startIdx === -1) {
-      throw new Error(`Case not found: ${caseName}`)
-    }
-
-    const endIdx = lines.findIndex((ln, idx) => idx > startIdx && ln.includes('@case'))
-    const start = startIdx + 2
-    const end = endIdx === -1 ? lines.length : endIdx + 1
-
-    return { start, end }
-  }
-
-  function caseHasViolation(
-    results: Awaited<ReturnType<typeof lint>>,
-    caseName: string,
-  ): boolean {
-    const { start, end } = getCaseArea(caseName)
-
-    return results.some(
-      (result) => result.ruleId === ruleId && result.line >= start && result.line <= end,
-    )
-  }
+  const { caseHasViolation } = createCaseHelpers(fixturePath, ruleId)
 
   it('fires on a single-await block body (at warn severity)', async () => {
     const results = await lint(fixturePath)
@@ -292,7 +274,6 @@ describe('maninak/prefer-concise-async-arrow', () => {
 
   it('reaches a fixed point (a second fix pass changes nothing)', async () => {
     const fixed = await lintAndFix(fixturePath)
-    const { writeFileSync, rmSync } = await import('node:fs')
     const settledPath = 'test/fixtures/async-arrow-settled.ts'
     writeFileSync(settledPath, fixed)
 
@@ -960,31 +941,7 @@ describe('maninak/jsdoc-oneline', () => {
   const ruleId = 'maninak/jsdoc-oneline'
   const expected = '/** Copies the sandbox identity into `altNodeHomePath`. */'
 
-  function getCaseArea(caseName: string): { start: number; end: number } {
-    const lines = readFileSync(fixturePath, 'utf-8').split('\n')
-    const startIdx = lines.findIndex((ln) => ln.includes(`@case ${caseName}`))
-
-    if (startIdx === -1) {
-      throw new Error(`Case not found: ${caseName}`)
-    }
-
-    const endIdx = lines.findIndex((ln, idx) => idx > startIdx && ln.includes('@case'))
-    const start = startIdx + 2
-    const end = endIdx === -1 ? lines.length : endIdx + 1
-
-    return { start, end }
-  }
-
-  function caseHasViolation(
-    results: Awaited<ReturnType<typeof lint>>,
-    caseName: string,
-  ): boolean {
-    const { start, end } = getCaseArea(caseName)
-
-    return results.some(
-      (result) => result.ruleId === ruleId && result.line >= start && result.line <= end,
-    )
-  }
+  const { caseHasViolation } = createCaseHelpers(fixturePath, ruleId)
 
   const malformed = [
     'multiline-clean',
@@ -1036,7 +993,6 @@ describe('maninak/jsdoc-oneline', () => {
 
   it('reaches a fixed point (a second fix pass changes nothing)', async () => {
     const fixed = await lintAndFix(fixturePath)
-    const { writeFileSync, rmSync } = await import('node:fs')
     const settledPath = 'test/fixtures/jsdoc-oneline-settled.ts'
     writeFileSync(settledPath, fixed)
 
@@ -1056,31 +1012,7 @@ describe('maninak/jsdoc-max-len', () => {
   const a50 = 'a'.repeat(50)
   const b50 = 'b'.repeat(50)
 
-  function getCaseArea(caseName: string): { start: number; end: number } {
-    const lines = readFileSync(fixturePath, 'utf-8').split('\n')
-    const startIdx = lines.findIndex((ln) => ln.includes(`@case ${caseName}`))
-
-    if (startIdx === -1) {
-      throw new Error(`Case not found: ${caseName}`)
-    }
-
-    const endIdx = lines.findIndex((ln, idx) => idx > startIdx && ln.includes('@case'))
-    const start = startIdx + 2
-    const end = endIdx === -1 ? lines.length : endIdx + 1
-
-    return { start, end }
-  }
-
-  function caseHasViolation(
-    results: Awaited<ReturnType<typeof lint>>,
-    caseName: string,
-  ): boolean {
-    const { start, end } = getCaseArea(caseName)
-
-    return results.some(
-      (result) => result.ruleId === ruleId && result.line >= start && result.line <= end,
-    )
-  }
+  const { caseHasViolation } = createCaseHelpers(fixturePath, ruleId)
 
   const c50 = 'c'.repeat(50)
   const d50 = 'd'.repeat(50)
@@ -1210,7 +1142,6 @@ describe('maninak/jsdoc-max-len', () => {
 
   it('reaches a fixed point (a second fix pass changes nothing)', async () => {
     const fixed = await lintAndFix(fixturePath)
-    const { writeFileSync, rmSync } = await import('node:fs')
     const settledPath = 'test/fixtures/jsdoc-max-len-settled.ts'
     writeFileSync(settledPath, fixed)
 
@@ -1228,26 +1159,12 @@ describe('padding-line-between-statements', async () => {
   const paddingFixturePath = 'test/fixtures/padding-line.ts'
   const rule = 'padding-line-between-statements'
 
-  /** Returns the {start, end} line range (1-indexed, inclusive) for a fixture case. */
-  function getCaseArea(fixture: string, caseName: string): { start: number; end: number } {
-    const lines = readFileSync(fixture, 'utf-8').split('\n')
-    const startIdx = lines.findIndex((ln) => ln.includes(`@case ${caseName}`))
-
-    if (startIdx === -1) {
-      throw new Error(`Case not found: ${caseName}`)
-    }
-
-    const endIdx = lines.findIndex((ln, idx) => idx > startIdx && ln.includes('@case'))
-    const start = startIdx + 2 // first code line after the anchor comment (1-indexed)
-    const end = endIdx === -1 ? lines.length : endIdx + 1
-
-    return { start, end }
-  }
+  const { getCaseArea } = createCaseHelpers(paddingFixturePath, rule)
 
   const results = (await lint(paddingFixturePath)).filter((result) => result.ruleId === rule)
 
   function isLineInCase(line: number, caseName: string): boolean {
-    const { start, end } = getCaseArea(paddingFixturePath, caseName)
+    const { start, end } = getCaseArea(caseName)
     return line >= start && line <= end
   }
 
@@ -1380,31 +1297,7 @@ describe('maninak/compact-return', () => {
   const fixturePath = 'test/fixtures/compact-return.ts'
   const ruleId = 'maninak/compact-return'
 
-  function getCaseArea(caseName: string): { start: number; end: number } {
-    const lines = readFileSync(fixturePath, 'utf-8').split('\n')
-    const startIdx = lines.findIndex((ln) => ln.includes(`@case ${caseName}`))
-
-    if (startIdx === -1) {
-      throw new Error(`Case not found: ${caseName}`)
-    }
-
-    const endIdx = lines.findIndex((ln, idx) => idx > startIdx && ln.includes('@case'))
-    const start = startIdx + 2
-    const end = endIdx === -1 ? lines.length : endIdx + 1
-
-    return { start, end }
-  }
-
-  function caseHasViolation(
-    results: Awaited<ReturnType<typeof lint>>,
-    caseName: string,
-  ): boolean {
-    const { start, end } = getCaseArea(caseName)
-
-    return results.some(
-      (result) => result.ruleId === ruleId && result.line >= start && result.line <= end,
-    )
-  }
+  const { caseHasViolation } = createCaseHelpers(fixturePath, ruleId)
 
   it('flags a blank line before return in a two-statement body', async () => {
     const results = await lint(fixturePath)
@@ -1492,7 +1385,6 @@ describe('maninak/compact-return', () => {
 
   it('reaches a fixed point (a second fix pass changes nothing)', async () => {
     const fixed = await lintAndFix(fixturePath)
-    const { writeFileSync, rmSync } = await import('node:fs')
     const settledPath = 'test/fixtures/compact-return-settled.ts'
     writeFileSync(settledPath, fixed)
 
@@ -1506,7 +1398,7 @@ describe('maninak/compact-return', () => {
   })
 })
 
-describe('JSX attribute quote style)', () => {
+describe('JSX attribute quote style', () => {
   async function lintJsx(file: string): Promise<Awaited<ReturnType<typeof lint>>> {
     return await callAtDir('test/fixtures/jsx-project', async () => await lint(file))
   }

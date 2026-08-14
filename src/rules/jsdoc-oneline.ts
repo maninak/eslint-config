@@ -47,7 +47,7 @@ const jsdocOneline: Rule.RuleModule = {
      * asterisks collapsed to single spaces, or `undefined` when the block must be left alone
      * (it carries a tag or contains a blank line in its body).
      */
-    function normalizedDescription(comment: Comment): string | undefined {
+    function normalizeDescription(comment: Comment): string | undefined {
       // `comment.value` is the text between `/*` and `*/`, so it starts with the leading `*`.
       const inner = comment.value.replace(/^\*/, '')
 
@@ -87,7 +87,7 @@ const jsdocOneline: Rule.RuleModule = {
         return
       }
 
-      const text = normalizedDescription(comment)
+      const text = normalizeDescription(comment)
       if (text === undefined) {
         return
       }

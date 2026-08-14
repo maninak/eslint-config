@@ -15,7 +15,7 @@ function notAsync(): Promise<number> {
   return Promise.resolve(1)
 }
 
-// ts/no-floating-promises target — but the rule is OFF in maninak, so this
+// ts/no-floating-promises target, but the rule is OFF in maninak, so this
 // should produce NO message. Test verifies the off-ness, not the firing.
 async function flooting() {
   Promise.resolve(1)

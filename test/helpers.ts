@@ -134,7 +134,7 @@ export async function lintAndFixRule(
 /**
  * Temporarily chdirs to `desiredCwd` (resolved relative to the maninak repo root, not to the
  * caller) for the duration of `callee`, then restores the previous cwd. Use this when a test
- * needs maninak's framework auto-detection to see specific deps in `package.json` — for
+ * needs maninak's framework auto-detection to see specific deps in `package.json`, for
  * example, Vue rules only load when the consumer's `package.json` declares `vue`.
  */
 export async function callAtDir<T>(desiredCwd: string, callee: () => Promise<T>): Promise<T> {
@@ -146,4 +146,47 @@ export async function callAtDir<T>(desiredCwd: string, callee: () => Promise<T>)
   } finally {
     process.chdir(prev)
   }
+}
+
+/**
+ * Builds the pair of lookups every rule-fixture suite needs, bound to one fixture and one
+ * rule.
+ *
+ * A fixture marks each scenario with an `@case <name>` comment, so a case owns the lines from
+ * just after its anchor up to the next anchor. Binding fixture and rule once keeps the call
+ * sites to `caseHasViolation(results, 'some-case')`.
+ */
+export function createCaseHelpers(
+  fixture: string,
+  ruleId: string,
+): {
+  getCaseArea: (caseName: string) => { start: number; end: number }
+  caseHasViolation: (results: LintResult[], caseName: string) => boolean
+} {
+  /** Returns the {start, end} line range (1-indexed, inclusive) for a fixture case. */
+  function getCaseArea(caseName: string): { start: number; end: number } {
+    const lines = readFileSync(fixture, 'utf-8').split('\n')
+    const startIdx = lines.findIndex((ln) => ln.includes(`@case ${caseName}`))
+
+    if (startIdx === -1) {
+      throw new Error(`Case not found in ${fixture}: ${caseName}`)
+    }
+
+    const endIdx = lines.findIndex((ln, idx) => idx > startIdx && ln.includes('@case'))
+    const start = startIdx + 2 // first code line after the anchor comment (1-indexed)
+    const end = endIdx === -1 ? lines.length : endIdx + 1
+
+    return { start, end }
+  }
+
+  /** Whether any `ruleId` finding in `results` lands inside the named case. */
+  function caseHasViolation(results: LintResult[], caseName: string): boolean {
+    const { start, end } = getCaseArea(caseName)
+
+    return results.some(
+      (result) => result.ruleId === ruleId && result.line >= start && result.line <= end,
+    )
+  }
+
+  return { getCaseArea, caseHasViolation }
 }

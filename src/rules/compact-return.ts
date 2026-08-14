@@ -42,7 +42,7 @@ const compactReturn: Rule.RuleModule = {
      * Counts blank lines in the gap between `prev` and `next`, treating any comment lines in
      * the gap as non-blank so that comment-adjacent spacing is never collapsed by this rule.
      */
-    function blankLineCountBetween(prev: Node, next: Node): number {
+    function countBlankLinesBetween(prev: Node, next: Node): number {
       const prevEndLine = prev.loc?.end.line ?? 0
       const nextStartLine = next.loc?.start.line ?? 0
 
@@ -67,7 +67,7 @@ const compactReturn: Rule.RuleModule = {
     }
 
     /** The statement list a node lives in, for a block, program, or switch case parent. */
-    function siblingStatementsOf(parent: Node): Node[] | undefined {
+    function getSiblingStatementsOf(parent: Node): Node[] | undefined {
       if (parent.type === 'BlockStatement' || parent.type === 'Program') {
         return parent.body
       }
@@ -85,7 +85,7 @@ const compactReturn: Rule.RuleModule = {
       }
 
       // Only handle returns that live directly in a statement list with siblings.
-      const body = siblingStatementsOf(parent)
+      const body = getSiblingStatementsOf(parent)
       if (!body) {
         return
       }
@@ -103,7 +103,7 @@ const compactReturn: Rule.RuleModule = {
         isSingleLine(prev) &&
         isSingleLine(node)
 
-      const blanks = blankLineCountBetween(prev, node)
+      const blanks = countBlankLinesBetween(prev, node)
 
       if (isCompact && blanks > 0) {
         context.report({
