@@ -147,22 +147,30 @@ export function isInConsumerDeps(name: string): boolean {
   return getWorkspacePackageJsons().some((pkg) => isDeclaredIn(pkg, name))
 }
 
-const DEFAULT_VUE_VERSION_TARGET = 3.5
+/** A consumer's Vue release, as the two components the version-gated rule sections need. */
+export interface VueVersion {
+  major: number
+  minor: number
+}
+
+const DEFAULT_VUE_VERSION: VueVersion = { major: 3, minor: 5 }
 
 /**
- * Returns a numeric Vue major.minor version inferred from the `vue` (or `nuxt`) dependency
- * range declared anywhere in the consumer's workspace, or {@link DEFAULT_VUE_VERSION_TARGET}
- * when nothing is declared.
+ * The Vue release inferred from the `vue` (or `nuxt`) range declared anywhere in the
+ * consumer's workspace, or {@link DEFAULT_VUE_VERSION} when nothing is declared.
  *
- * The number is intentionally lossy: only the first two components are kept (3.5, 3.4, 3.0,
- * 2.7 etc.) because that's all the version-gated rule sections need to distinguish. Build
- * metadata, patch versions, pre-release tags, and prefixes (`^`, `~`, `>=`, `workspace:`,
- * `npm:`) are stripped before parsing.
+ * Deliberately lossy: only major and minor are kept, because that is all the version-gated
+ * rule sections distinguish. Patch versions, pre-release tags and range prefixes (`^`, `~`,
+ * `>=`, `workspace:`, `npm:`) are stripped before parsing.
+ *
+ * Kept as two numbers rather than one `major.minor` float, because a float compares minors as
+ * fractions: `3.10` parses to `3.1`, which reads as OLDER than 3.5 and would silently drop
+ * every 3.5-gated rule the day Vue ships 3.10.
  *
  * Auto-detection is just a default. Consumers who want different gating can override any rule
- * in their own `eslint.config.mjs` by appending a config block that re-sets the rule.
+ * in their own `eslint.config.mjs` by appending a config block that re-sets it.
  */
-export function getConsumerVueVersion(): number {
+export function getConsumerVueVersion(): VueVersion {
   for (const pkg of getWorkspacePackageJsons()) {
     const range =
       pkg.dependencies?.['vue'] ??
@@ -173,13 +181,19 @@ export function getConsumerVueVersion(): number {
     if (!range) {
       continue
     }
+
     const match = /(\d+)\.(\d+)/.exec(range)
     if (match) {
-      return Number.parseFloat(`${match[1]}.${match[2]}`)
+      return { major: Number(match[1]), minor: Number(match[2]) }
     }
   }
 
-  return DEFAULT_VUE_VERSION_TARGET
+  return DEFAULT_VUE_VERSION
+}
+
+/** Whether `version` is at least `major.minor`, comparing the two components separately. */
+export function isVueAtLeast(version: VueVersion, major: number, minor: number): boolean {
+  return version.major > major || (version.major === major && version.minor >= minor)
 }
 
 /** True when the consumer's cwd has a `tsconfig.json` at its root. */

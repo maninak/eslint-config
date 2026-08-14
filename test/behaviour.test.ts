@@ -2294,6 +2294,47 @@ describe('error-handling rules from newer eslint cores', () => {
   })
 })
 
+describe('a Vue minor past 9 still counts as newer, not older', () => {
+  /*
+   * The detected version used to be one `major.minor` float, so `3.10` parsed to `3.1` and
+   * compared as OLDER than 3.5. Every 3.5-gated rule would have vanished silently the day Vue
+   * shipped 3.10, which is a whole minor nobody would think to test.
+   */
+  it('vue/prefer-use-template-ref stays on for a consumer declaring vue ^3.10.0', async () => {
+    const results = await callAtDir(
+      'test/fixtures/vue-310',
+      async () => await lint('TemplateRef.vue'),
+    )
+
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'vue/prefer-use-template-ref' }),
+    )
+  })
+})
+
+describe('brace style survives the prettier block that would silently disable it', () => {
+  /*
+   * `curly: 'all'` was set in an early block and then zeroed by eslint-config-prettier, which
+   * the preset spreads into a LATER block applying to every file. The preset had shipped with
+   * no brace enforcement at all, under a comment claiming the net behaviour was unchanged, so
+   * these assert the rule reaches a real lint rather than merely appearing in the config.
+   */
+  it('curly fires on a braceless single-statement if in TypeScript', async () => {
+    const results = await lint('test/fixtures/curly.ts')
+
+    expect(results).toContainEqual(expect.objectContaining({ ruleId: 'curly' }))
+  })
+
+  it('curly fires inside an SFC too, where the prettier-vue block also spreads that set', async () => {
+    const results = await callAtDir(
+      'test/fixtures/vue-project',
+      async () => await lint('Curly.vue'),
+    )
+
+    expect(results).toContainEqual(expect.objectContaining({ ruleId: 'curly' }))
+  })
+})
+
 describe('unicorn rules reach .vue files', () => {
   /*
    * antfu v9.3 scoped its unicorn block to a JS/TS glob, which silently stopped every rule

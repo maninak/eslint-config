@@ -23,7 +23,12 @@ import compactReturn from './rules/compact-return.js'
 import jsdocMaxLen from './rules/jsdoc-max-len.js'
 import jsdocOneline from './rules/jsdoc-oneline.js'
 import preferConciseAsyncArrow from './rules/prefer-concise-async-arrow.js'
-import { getConsumerVueVersion, interopDefault, isInConsumerDeps } from './utils.js'
+import {
+  getConsumerVueVersion,
+  interopDefault,
+  isInConsumerDeps,
+  isVueAtLeast,
+} from './utils.js'
 
 const prettier = interopDefault(pluginPrettier)
 
@@ -39,6 +44,15 @@ const prettierRulesFixingConflictsWithEslint = {
   ...interopDefault(configPrettier).rules,
 }
 delete prettierRulesFixingConflictsWithEslint['vue/html-self-closing']
+/*
+ * `curly` is in eslint-config-prettier's list because its `multi-line` and `multi-or-nest`
+ * forms fight prettier over where a brace goes. The `all` form below does not: prettier keeps
+ * whichever branch style you wrote, so it enforces nothing here and dropping the disable is
+ * the only way `curly: 'all'` survives. Left in, this block silently switched braces off for
+ * every file type the preset lints, since it is spread into a LATER block than the one
+ * setting the rule.
+ */
+delete prettierRulesFixingConflictsWithEslint['curly']
 
 const maxColumnsPerLine = 95
 
@@ -266,7 +280,7 @@ export default async function buildPreset(): Promise<
             enforceForJSX: true,
           },
         ],
-        // Disabling antfu/curly lets `curly: 'all'` win unopposed. Net behavior: unchanged.
+        // Disabling antfu/curly lets `curly: 'all'` win unopposed.
         'antfu/curly': 'off',
         'curly': ['warn', 'all'],
         'no-debugger': 'warn',
@@ -688,7 +702,7 @@ export default async function buildPreset(): Promise<
                * `eslint.config.mjs` for a Vue 2 codebase if needed.
                * --------------------------------------------------------------------------
                */
-              ...(resolvedVueVersion >= 3
+              ...(isVueAtLeast(resolvedVueVersion, 3, 0)
                 ? {
                     'vue/define-props-declaration': ['warn', 'type-based'],
                     'vue/define-emits-declaration': ['warn', 'type-based'],
@@ -704,7 +718,9 @@ export default async function buildPreset(): Promise<
                * Rules that require APIs introduced in Vue 3.5 (e.g. `useTemplateRef`).
                * --------------------------------------------------------------------------
                */
-              ...(resolvedVueVersion >= 3.5 ? { 'vue/prefer-use-template-ref': 'warn' } : {}),
+              ...(isVueAtLeast(resolvedVueVersion, 3, 5)
+                ? { 'vue/prefer-use-template-ref': 'warn' }
+                : {}),
 
               // Vue equivalents of native JS logic rules
               'vue/dot-notation': ['warn', { allowKeywords: true }],
