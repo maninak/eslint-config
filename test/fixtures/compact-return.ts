@@ -96,3 +96,13 @@ function _noncompactTrailingComment(_x: number) {
   const _tripled = _x * 3 // scaled up
   return _doubled + _tripled
 }
+
+// @case noncompact-standalone-comment-fire
+// Three statements, no blank before return, and a comment on its OWN line documenting the
+// return. The required blank must land ABOVE that comment, keeping it with the return.
+function _noncompactStandaloneComment(_x: number) {
+  const _quadrupled = _x * 4
+  const _quintupled = _x * 5
+  // explains the return
+  return _quadrupled + _quintupled
+}

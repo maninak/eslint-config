@@ -133,15 +133,37 @@ const compactReturn: Rule.RuleModule = {
           node,
           messageId: 'blankRequired',
           fix(fixer) {
-            // Anchor the blank on the token or comment immediately before `return`, not on the
-            // previous statement node. That keeps a comment trailing the previous statement
-            // attached to it and lands the blank before `return`, instead of inserting it
-            // between the statement and its own trailing comment.
-            const before = src.getTokenBefore(node, { includeComments: true })
+            /*
+             * Anchor the blank on the token or comment immediately before `return`, not on the
+             * previous statement node. That keeps a comment TRAILING the previous statement
+             * attached to it, and lands the blank before `return` rather than between the
+             * statement and its own trailing comment.
+             *
+             * A comment that begins its own line is the opposite case: it documents the
+             * `return` below it, so the blank has to go above the comment. Anchoring on it
+             * split the pair and left the comment reading as a note on the statement above.
+             */
+            let before = src.getTokenBefore(node, { includeComments: true })
+            while (before && isOwnLineComment(before)) {
+              before = src.getTokenBefore(before, { includeComments: true })
+            }
+
             return before ? fixer.insertTextAfter(before, '\n') : null
           },
         })
       }
+    }
+
+    /** Whether `token` is a comment with nothing but whitespace before it on its line. */
+    function isOwnLineComment(token: { type: string; range?: [number, number] }): boolean {
+      if (token.type !== 'Line' && token.type !== 'Block') {
+        return false
+      }
+
+      const text = src.getText()
+      const lineStart = text.lastIndexOf('\n', token.range![0]) + 1
+
+      return text.slice(lineStart, token.range![0]).trim().length === 0
     }
 
     return {

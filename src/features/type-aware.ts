@@ -83,8 +83,14 @@ export function switchToLegacyProjectMode(
  * pattern-matching them by hand gets the answer wrong either way. Reports nothing when the
  * project has no SFCs at all, where the option is merely redundant rather than misconfigured.
  */
+/** The tsconfigs being judged, worded for a message that may name one or several. */
+function describePaths(tsconfigPaths: string[]): string {
+  const quoted = tsconfigPaths.map((tsconfigPath) => `"${tsconfigPath}"`)
+  return quoted.length === 1 ? quoted[0]! : `none of ${quoted.join(', ')}`
+}
+
 export async function findVueTypeAwareProblem(
-  tsconfigPath: string,
+  tsconfigPaths: string[],
 ): Promise<string | undefined> {
   let loaded
   try {
@@ -92,9 +98,9 @@ export async function findVueTypeAwareProblem(
   } catch {
     console.warn(
       `[@maninak/eslint-config] "typescript" could not be imported, so whether ` +
-        `"${tsconfigPath}" covers .vue files could not be checked. Type-aware linting of ` +
-        `SFCs is being left on; if every SFC reports "was not found by the project ` +
-        `service", that is why.`,
+        `${describePaths(tsconfigPaths)} covers .vue files could not be checked. Type-aware ` +
+        `linting of SFCs is being left on; if every SFC reports "was not found by the ` +
+        `project service", that is why.`,
     )
 
     return undefined
@@ -103,33 +109,40 @@ export async function findVueTypeAwareProblem(
   // widens back to `any` there.
   const typescript = loaded
 
-  const absolute = path.resolve(process.cwd(), tsconfigPath)
-  // Wrapped rather than passed bare: `sys.readFile` is a method, and handing it over unbound
-  // would strip its `this`.
-  const configFile = typescript.readConfigFile(absolute, (file) =>
-    typescript.sys.readFile(file),
-  )
-  if (configFile.error) {
-    return undefined // Let ESLint report an unreadable tsconfig in its own words.
-  }
+  /*
+   * ANY of the resolved tsconfigs covering `.vue` is enough, because a multi-config consumer
+   * gets every one of them handed to the parser by {@link switchToLegacyProjectMode}. Judging
+   * only the first wrongly failed a setup whose SFCs are covered by a later one.
+   */
+  for (const tsconfigPath of tsconfigPaths) {
+    const absolute = path.resolve(process.cwd(), tsconfigPath)
+    // Wrapped rather than passed bare: `sys.readFile` is a method, and handing it over
+    // unbound would strip its `this`.
+    const configFile = typescript.readConfigFile(absolute, (file) =>
+      typescript.sys.readFile(file),
+    )
+    if (configFile.error) {
+      return undefined // Let ESLint report an unreadable tsconfig in its own words.
+    }
 
-  const parsed = typescript.parseJsonConfigFileContent(
-    configFile.config,
-    typescript.sys,
-    path.dirname(absolute),
-    undefined,
-    absolute,
-    undefined,
-    [
-      {
-        extension: '.vue',
-        isMixedContent: true,
-        scriptKind: typescript.ScriptKind.Deferred,
-      },
-    ],
-  )
-  if (parsed.fileNames.some((file) => file.endsWith('.vue'))) {
-    return undefined
+    const parsed = typescript.parseJsonConfigFileContent(
+      configFile.config,
+      typescript.sys,
+      path.dirname(absolute),
+      undefined,
+      absolute,
+      undefined,
+      [
+        {
+          extension: '.vue',
+          isMixedContent: true,
+          scriptKind: typescript.ScriptKind.Deferred,
+        },
+      ],
+    )
+    if (parsed.fileNames.some((file) => file.endsWith('.vue'))) {
+      return undefined
+    }
   }
 
   // Only now is a filesystem sweep worth its cost, and only to tell "misconfigured" apart
@@ -143,10 +156,10 @@ export async function findVueTypeAwareProblem(
   }
 
   return (
-    `"${tsconfigPath}" does not include any of the ${sfcs.length} .vue files in this ` +
-    `project, so each one would report "was not found by the project service" instead of ` +
-    `linting. Add "**/*.vue" to that tsconfig's "include", or point typescript.tsconfigPath ` +
-    `at one that covers SFCs (Nuxt generates .nuxt/tsconfig.json).`
+    `${describePaths(tsconfigPaths)} does not include any of the ${sfcs.length} .vue files ` +
+    `in this project, so each one would report "was not found by the project service" ` +
+    `instead of linting. Add "**/*.vue" to that tsconfig's "include", or point ` +
+    `typescript.tsconfigPath at one that covers SFCs (Nuxt generates .nuxt/tsconfig.json).`
   )
 }
 

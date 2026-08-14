@@ -150,15 +150,15 @@ export async function maninak(
     )
   }
   /*
-   * The tsconfig SFC type-awareness would run against, or `undefined` when a precondition
-   * rules it out. Carrying the path rather than a boolean keeps it narrowed at the two later
-   * uses, which a reassignable flag cannot do.
+   * The tsconfigs SFC type-awareness would run against, or `undefined` when a precondition
+   * rules it out. Carrying the paths rather than a boolean keeps them narrowed at the two
+   * later uses, which a reassignable flag cannot do.
    */
-  const typeAwareTsconfig =
-    vueTypeAware && vueEnabled && tsconfigPaths !== undefined ? tsconfigPaths[0]! : undefined
-  let typeAwareVue = typeAwareTsconfig !== undefined
-  if (typeAwareTsconfig !== undefined) {
-    const problem = await findVueTypeAwareProblem(typeAwareTsconfig)
+  const typeAwarePaths =
+    vueTypeAware && vueEnabled && tsconfigPaths !== undefined ? tsconfigPaths : undefined
+  let typeAwareVue = typeAwarePaths !== undefined
+  if (typeAwarePaths !== undefined) {
+    const problem = await findVueTypeAwareProblem(typeAwarePaths)
     if (problem) {
       if (vueTypeAwareRequested) {
         throw new Error(`[@maninak/eslint-config] ${problem}`)
@@ -199,8 +199,8 @@ export async function maninak(
   }
 
   // Runs before the legacy switch below so both passes agree on which project mode is active.
-  if (typeAwareVue && typeAwareTsconfig !== undefined) {
-    giveVueBlockATypeScriptProject(configs, typeAwareTsconfig)
+  if (typeAwareVue && typeAwarePaths !== undefined) {
+    giveVueBlockATypeScriptProject(configs, typeAwarePaths[0]!)
   }
 
   if (tsconfigPaths && tsconfigPaths.length > 1) {

@@ -1480,6 +1480,16 @@ describe('maninak/compact-return', () => {
     )
   })
 
+  it('adds the required blank ABOVE a standalone comment, keeping it with the return', async () => {
+    const fixed = await lintAndFix(fixturePath)
+
+    // A comment on its own line documents the return below it, so anchoring the blank on the
+    // comment orphaned it upwards and made it read as a note on the previous statement.
+    expect(fixed).toMatch(
+      /const _quintupled = _x \* 5\n\n {2}\/\/ explains the return\n {2}return/,
+    )
+  })
+
   it('reaches a fixed point (a second fix pass changes nothing)', async () => {
     const fixed = await lintAndFix(fixturePath)
     const { writeFileSync, rmSync } = await import('node:fs')
@@ -2291,6 +2301,45 @@ describe('error-handling rules from newer eslint cores', () => {
 
     expect(reported).toHaveLength(1)
     expect(reported[0]?.line).toBe(16)
+  })
+})
+
+describe('vueTypeAware judges every resolved tsconfig, not just the first', () => {
+  /*
+   * A consumer splitting source and SFCs across two tsconfigs hands BOTH to the parser via
+   * the legacy project mode, so SFC coverage in either one is enough. Checking only the first
+   * hard-failed that setup when the option was named explicitly, and warned falsely otherwise.
+   */
+  it('stays silent when a later tsconfig is the one covering .vue', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      await callAtDir(
+        'test/fixtures/vue-split-tsconfig',
+        async () =>
+          await maninak({
+            vueTypeAware: true,
+            typescript: { tsconfigPath: ['./tsconfig.json', './tsconfig.vue.json'] },
+          }),
+      )
+    } finally {
+      warn.mockRestore()
+    }
+
+    expect(warn.mock.calls.flat().join(' ')).not.toContain('.vue files')
+  })
+
+  it('still reports when NO tsconfig covers .vue, so the check has not been defanged', async () => {
+    const building = callAtDir(
+      'test/fixtures/vue-split-tsconfig',
+      async () =>
+        await maninak({
+          vueTypeAware: true,
+          typescript: { tsconfigPath: ['./tsconfig.json'] },
+        }),
+    )
+
+    await expect(building).rejects.toThrow(/does not include any of the \d+ \.vue files/)
   })
 })
 
