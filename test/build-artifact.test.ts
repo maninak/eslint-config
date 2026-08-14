@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { globSync } from 'tinyglobby'
 import { describe, expect, it } from 'vitest'
 
 /*
@@ -164,5 +166,39 @@ describe('framework-specific plugins are loaded lazily, not at config-module loa
         )
       })
     }
+  }
+})
+
+/*
+ * Declaration-chain guard.
+ *
+ * `tsc --emitDeclarationOnly` treats a `.d.ts` INPUT as already emitted and silently skips it,
+ * so writing a types-only module as `src/x.d.ts` leaves `dist/` with declarations importing a
+ * `./x.js` that was never written. Consumers then see `any` where an option type should be,
+ * and nothing else here notices: lint, tests and the build all stay green.
+ */
+describe('the published declarations resolve each other', () => {
+  const declarations = globSync(['dist/**/*.d.ts', 'dist/**/*.d.cts'], { absolute: true })
+
+  it('emits declarations at all, so the check below cannot pass vacuously', () => {
+    expect(declarations.length).toBeGreaterThan(5)
+  })
+
+  for (const declaration of declarations) {
+    const shown = path.relative(process.cwd(), declaration)
+
+    it(`${shown} imports only files that exist`, () => {
+      const source = readFileSync(declaration, 'utf8')
+      const specifiers = [...source.matchAll(/from '(\.[^']*)'/g)].map((match) => match[1]!)
+      const missing = specifiers.filter((specifier) => {
+        const resolved = path.resolve(path.dirname(declaration), specifier)
+
+        return !['.d.ts', '.d.cts', '.ts', '.js'].some((extension) =>
+          existsSync(resolved.replace(/\.[cm]?js$/, '') + extension),
+        )
+      })
+
+      expect(missing).toEqual([])
+    })
   }
 })

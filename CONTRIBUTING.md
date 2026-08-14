@@ -20,7 +20,7 @@ pnpm pack --pack-destination /tmp
 
 # In a throwaway branch of a real consumer
 cd /path/to/some-consumer
-pnpm add -D /tmp/maninak-eslint-config-0.2.0.tgz
+pnpm add -D /tmp/maninak-eslint-config-*.tgz
 pnpm lint
 ```
 
@@ -41,9 +41,9 @@ pnpm build && pnpm pack --pack-destination /tmp && tar tzf /tmp/maninak-eslint-c
 
 Two things make this package unusual.
 
-**The config file lints itself.** `eslint.config.mjs` imports from `./dist/index.js`. Any change to `src/config.ts` requires a `pnpm build` before the new rules show up in editor or `pnpm lint`. The build output is committed-adjacent (in `dist/`), so the flow is: edit `src/`, run `pnpm build`, then `pnpm lint`.
+**The config file lints itself.** `eslint.config.ts` imports from `./src/index.js`, not from `dist/`, so an edit under `src/` is live in `pnpm lint` and in the editor without a build. `pnpm build` matters only for what ships: the tarball, the declarations, and `test/build-artifact.test.ts`, which lints `dist/` rather than `src/`.
 
-**Two tsconfigs, on purpose.** `tsconfig.json` covers everything the IDE and the lint type-checker need to see (`src/`, `types/`, `scripts/`, `eslint.config.mjs`). `tsconfig.build.json` is the narrow emission config used by the `postbuild` step that runs `tsc -p tsconfig.build.json --emitDeclarationOnly` to produce `dist/*.d.ts`. The narrow config sets `rootDir: ./src` to satisfy TypeScript 6's TS5011 emission check. If you find yourself adding a new directory of source, add it to both.
+**Three tsconfigs, on purpose.** `tsconfig.json` covers everything the IDE and the lint type-checker need to see (`src/`, `test/`, `types/`, `scripts/`, `eslint.config.ts`, `vitest.config.ts`). `tsconfig.typecheck.json` extends it and drops `test/fixtures`, whose files are deliberately broken; it is what `pnpm test:typings` runs. `tsconfig.build.json` is the narrow emission config used by the `postbuild` step that runs `tsc -p tsconfig.build.json --emitDeclarationOnly` to produce `dist/*.d.ts`. The narrow config sets `rootDir: ./src` to satisfy TypeScript 6's TS5011 emission check. If you find yourself adding a new directory of source, add it to the ones that should see it.
 
 ## What to watch for when bumping `@antfu/eslint-config`
 
@@ -64,14 +64,15 @@ TypeScript 6 added TS5011 (explicit `rootDir` required when `outDir` is set and 
 
 `eslint-plugin-jasmine` ships no TypeScript declarations. The ambient shim at `types/eslint-plugin-jasmine.d.ts` keeps `verbatimModuleSyntax` happy. If the plugin starts shipping types, delete the shim.
 
-`@stylistic/eslint-plugin` is registered manually in `src/config.ts` because antfu with `stylistic: false` does not register the plugin itself. The `style/...` rule prefix we use is the rename antfu defines. If antfu's rename map changes, the prefix must change.
+`@stylistic/eslint-plugin` is registered manually in `src/preset.ts` because antfu with `stylistic: false` does not register the plugin itself. The `style/...` rule prefix we use is the rename antfu defines. If antfu's rename map changes, the prefix must change.
 
 ## Release process
 
 ```bash
 # bump version in package.json (or npm version <patch|minor|major>)
-npm version <patch|minor|major>    # runs preversion: build + test
-pnpm publish                       # runs prepublish: verify-deps + lint, then publishes
+npm version <patch|minor|major>    # runs preversion: verify-deps, lint, test, build,
+                                   # build-artifact test, publint
+pnpm publish                       # runs prepublishOnly: build + publint, then publishes
                                    # postpublish pushes the version tag
 ```
 
@@ -79,4 +80,4 @@ Before publishing a new major or significant minor, install the tarball in `cyte
 
 ## Supporting the project
 
-Beyond code, a sustaining way to contribute is [sponsoring on Liberapay](https://liberapay.com/maninak/donate). Recurring micro-donations help keep this other projects actively maintained.
+Beyond code, a sustaining way to contribute is [sponsoring on Liberapay](https://liberapay.com/maninak/donate). Recurring micro-donations help keep this and other projects actively maintained.

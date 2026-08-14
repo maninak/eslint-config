@@ -11,12 +11,12 @@ import {
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { detectTailwindCssDialect } from '../src/features/css.js'
 import {
-  detectTailwindCssDialect,
   detectTailwindTheme,
   findTailwindInstall,
   resolveTailwindInstall,
-} from '../src/config.js'
+} from '../src/features/tailwind.js'
 import maninak from '../src/index.js'
 import { callAtDir, lint, lintAndFix, lintAndFixRule, resolveRule } from './helpers.js'
 

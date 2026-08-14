@@ -186,3 +186,84 @@ export function getConsumerVueVersion(): number {
 export function hasConsumerTsconfig(): boolean {
   return existsSync(path.join(process.cwd(), 'tsconfig.json'))
 }
+
+/*
+ * Where a project's own CSS is never found: dependencies, build output, and caches. Scanning
+ * them would be slow and would surface a bundled copy of somebody else's entry point as if it
+ * were this project's theme.
+ */
+const THEME_SCAN_IGNORE = [
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/coverage/**',
+  '**/vendor/**',
+  '**/.git/**',
+  '**/.cache/**',
+  '**/.nuxt/**',
+  '**/.output/**',
+  '**/.next/**',
+  '**/.svelte-kit/**',
+  '**/.vercel/**',
+  '**/.netlify/**',
+]
+
+const projectCssCache = new Map<string, string[]>()
+
+/**
+ * Every CSS file the project owns, as absolute paths, dependencies and build output excluded.
+ *
+ * Cached per cwd because two features ask: the Tailwind theme scan reads these looking for the
+ * entry point, and the CSS rules ask only whether there are any. One walk of the tree answers
+ * both, which matters on a monorepo where it costs ~45ms.
+ */
+export function findProjectCssFiles(root: string): string[] {
+  const cached = projectCssCache.get(root)
+  if (cached) {
+    return cached
+  }
+
+  let files: string[]
+  try {
+    files = globSync(['**/*.css'], { cwd: root, ignore: THEME_SCAN_IGNORE, absolute: true })
+    files.sort()
+  } catch {
+    // A glob failure degrades to "found nothing", which every caller already explains.
+    files = []
+  }
+  projectCssCache.set(root, files)
+
+  return files
+}
+
+/**
+ * A package's directory, found by walking `node_modules` up from `startDir` the way Node
+ * itself resolves. Deliberately not `require.resolve`, which needs an entry point the package
+ * may not expose; a `package.json` is enough to know it is installed and to read its version.
+ */
+export function findInstalledPackage(name: string, startDir: string): string | undefined {
+  let dir = path.resolve(startDir)
+  while (true) {
+    const candidate = path.join(dir, 'node_modules', ...name.split('/'), 'package.json')
+    if (existsSync(candidate)) {
+      return path.dirname(candidate)
+    }
+
+    const parent = path.dirname(dir)
+    if (parent === dir) {
+      return undefined
+    }
+    dir = parent
+  }
+}
+
+/**
+ * Unwraps a CJS/ESM interop `{ default }` wrapper, which plugin packages vary on.
+ *
+ * Generic rather than `any`-returning so the unwrapped plugin keeps its type at every call
+ * site: an `any` here would silently disable every `ts/no-unsafe-*` check downstream of it.
+ */
+export function interopDefault<T>(module: T): T extends { default: infer D } ? D : T {
+  const wrapper = module as { default?: unknown } | null | undefined
+  return (wrapper?.default ?? module) as T extends { default: infer D } ? D : T
+}
