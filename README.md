@@ -381,23 +381,31 @@ What it will not flag:
 
 The rule reports without fixing, since renaming a file on disk would break every import of it. Each fix is a `git mv` plus an import rewrite.
 
-### Optional: type-aware linting inside `.vue` files
+### Type-aware linting inside `.vue` files
 
-Off by default. Without it, rules that need type information (`ts/no-unsafe-argument`, `ts/no-unsafe-assignment`, `ts/no-unsafe-call`, `ts/no-unsafe-member-access`, `ts/no-unsafe-return`, `ts/no-misused-promises`, `ts/restrict-template-expressions` and the rest) run on `.ts` and stop at the `.vue` boundary. Nothing errors and nothing warns, so a Vue or Nuxt project can believe those rules are enforced everywhere while the files holding most of its code are exempt. Opt in with:
+On by default, wherever it can be. Without it, rules that need type information (`ts/no-unsafe-argument`, `ts/no-unsafe-assignment`, `ts/no-unsafe-call`, `ts/no-unsafe-member-access`, `ts/no-unsafe-return`, `ts/no-misused-promises`, `ts/restrict-template-expressions` and the rest) run on `.ts` and stop at the `.vue` boundary. Nothing errors and nothing warns, so a Vue or Nuxt project can believe those rules are enforced everywhere while the files holding most of its code are exempt.
+
+Three preconditions have to hold, each detected rather than assumed:
+
+- **Vue support must be on**, which happens automatically when `vue` or `nuxt` is a dependency.
+- **Type-aware linting must already be active**, meaning a resolved `tsconfig.json` (see [Multiple tsconfig files](#multiple-tsconfig-files)). A repo that never opted into type-aware linting is left exactly as it was.
+- **That tsconfig's `include` must cover `.vue` files.** Nuxt's generated `.nuxt/tsconfig.json` does; a hand-rolled one often does not.
+
+When one does not hold, the preset says so once and leaves your SFCs linted as before. It will not fail a lint over a default you never chose. Setting `vueTypeAware: true` by hand asks for it explicitly, and then an unmet precondition is a hard error instead, because silently not doing what you asked for is the worse answer.
+
+To switch it off:
 
 ```ts
 export default maninak({
-  vueTypeAware: true,
+  vueTypeAware: false,
 })
 ```
 
-Requirements and limits, all worth knowing before you turn it on:
+That is the lever to reach for on lint time. Type-checking SFC script blocks costs roughly 1.5x on a Vue-heavy tree (measured: 60 SFCs went from ~3.0s to ~4.4s, about 23ms extra per SFC).
 
-- **Vue support must be on**, which happens automatically when `vue` or `nuxt` is a dependency. Without it there are no `.vue` files to lint, so the option is ignored with a warning rather than failing your lint.
-- **Type-aware linting must already be active**, meaning a resolved `tsconfig.json` (see [Multiple tsconfig files](#multiple-tsconfig-files)).
-- **That tsconfig's `include` must cover `.vue` files.** Nuxt's generated `.nuxt/tsconfig.json` does; a hand-rolled one often does not. If it does not, the config throws once with an actionable message rather than letting every SFC report `was not found by the project service`.
+Two things worth knowing:
+
 - **Coverage is the `<script>` block, not the template.** `vue-eslint-parser` hands typescript-eslint the script program, so an unsafe value is reported where it is created rather than where a template interpolation dereferences it.
-- **It costs roughly 1.5x lint time on a Vue-heavy tree** (measured: 60 SFCs went from ~3.0s to ~4.4s, about 23ms extra per SFC). That cost is why it stays opt-in rather than becoming the default.
 - **Expect a wave of findings the first time.** These are pre-existing type holes that were never reported, not new ones.
 
 ### Optional: add your own import groups

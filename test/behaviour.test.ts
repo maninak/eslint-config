@@ -1917,6 +1917,26 @@ describe('vueTypeAware is inapplicable rather than fatal without Vue', () => {
     }
   })
 
+  /*
+   * The default reaches every consumer, most of whom write no Vue at all. Warning them that an
+   * option they never set is inapplicable would make the preset noisy for the majority to
+   * serve the minority, so only an explicit `vueTypeAware: true` earns that message.
+   */
+  it('stays silent in a repo with no Vue when nobody set the option', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    try {
+      await callAtDir(
+        'test/fixtures/multi-ts',
+        async () => await maninak({ typescript: { tsconfigPath: './tsconfig.json' } }),
+      )
+
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('vueTypeAware'))
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('stays silent when the option is off', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
@@ -1942,13 +1962,18 @@ describe('vueTypeAware extends type-aware linting into SFCs', () => {
    */
   const options = { vueTypeAware: true, typescript: { tsconfigPath: './tsconfig.json' } }
 
+  /** `vueTypeAware` left `undefined` means "never mentioned", which is now its own case. */
   async function lintTypeAwareFixture(
     file: string,
-    withOption: boolean,
+    vueTypeAware?: boolean,
   ): Promise<Awaited<ReturnType<typeof lint>>> {
     return await callAtDir(
       'test/fixtures/vue-type-aware',
-      async () => await lint(file, withOption ? options : { typescript: options.typescript }),
+      async () =>
+        await lint(file, {
+          typescript: options.typescript,
+          ...(vueTypeAware === undefined ? {} : { vueTypeAware }),
+        }),
     )
   }
 
@@ -1960,9 +1985,19 @@ describe('vueTypeAware extends type-aware linting into SFCs', () => {
     )
   })
 
+  it('reaches into SFCs by default, without the option being mentioned at all', async () => {
+    // The default flip: a repo already linting type-aware gets its SFCs covered too, with
+    // nothing added to its config.
+    const results = await lintTypeAwareFixture('Unsafe.vue')
+
+    expect(results).toContainEqual(
+      expect.objectContaining({ ruleId: 'ts/no-unsafe-argument' }),
+    )
+  })
+
   it('reports nothing type-aware in that same SFC when the option is off', async () => {
-    // The paired assertion that makes the case above meaningful, and the measure of what
-    // every Vue consumer is missing today.
+    // The paired assertion that makes the case above meaningful, and the escape hatch for
+    // anyone who wants the lint time back.
     const results = await lintTypeAwareFixture('Unsafe.vue', false)
     const typeAware = results.filter((finding) => finding.ruleId?.startsWith('ts/no-unsafe-'))
 
@@ -1991,7 +2026,7 @@ describe('vueTypeAware extends type-aware linting into SFCs', () => {
     expect(lines).toEqual([4])
   })
 
-  it('fails with one actionable error when the tsconfig does not cover SFCs', async () => {
+  it('fails with one actionable error when asked for and the tsconfig misses SFCs', async () => {
     // Otherwise every SFC reports "was not found by the project service" as a parse error,
     // which in a real app is hundreds of failures that never name the cause.
     const build = callAtDir(
@@ -2000,6 +2035,29 @@ describe('vueTypeAware extends type-aware linting into SFCs', () => {
     )
 
     await expect(build).rejects.toThrow(/does not include any of the 1 \.vue files/)
+  })
+
+  /*
+   * The same tsconfig, with nobody having asked for SFC coverage. Failing here would break the
+   * lint of every Vue repo whose tsconfig happens not to include SFCs, over a default they
+   * never chose, so this one degrades and explains itself instead.
+   */
+  it('warns and lints on when the tsconfig misses SFCs and nobody asked', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const configs = await callAtDir(
+        'test/fixtures/vue-type-aware-untracked',
+        async () => await maninak({ typescript: options.typescript }),
+      )
+
+      expect(configs.length).toBeGreaterThan(0)
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('does not include any of the 1 .vue files'),
+      )
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('leaves .ts behaviour unchanged whether the option is on or off', async () => {

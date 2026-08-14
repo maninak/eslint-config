@@ -113,20 +113,24 @@ export interface ManinakExtraOptions {
   sortImports?: SortImportsOptions
 
   /**
-   * When true, extend type-aware linting to `.vue` single-file components, so rules needing
-   * type information (`ts/no-unsafe-*`, `ts/no-misused-promises`,
+   * Extends type-aware linting to `.vue` single-file components, so rules needing type
+   * information (`ts/no-unsafe-*`, `ts/no-misused-promises`,
    * `ts/restrict-template-expressions`, and the rest) run inside SFCs instead of stopping at
    * the `.vue` boundary.
    *
-   * Three preconditions, which fail differently on purpose. Vue support must be on, else the
-   * option is inapplicable and is ignored with a warning. Type-aware linting must be active,
-   * meaning a resolved `tsconfig.json` (see `typescript.tsconfigPath`). And that tsconfig's
-   * `include` must cover `.vue`: one that excludes them makes every SFC report "not found in
-   * project" instead of linting, so that case throws with an actionable message rather than
-   * emitting a flood of parser errors.
+   * Default: `true`, but only where all three preconditions hold, each detected rather than
+   * assumed. Vue support must be on. Type-aware linting must already be active, meaning a
+   * resolved `tsconfig.json` (see `typescript.tsconfigPath`), so a repo that never opted into
+   * type-aware linting is untouched by this. And that tsconfig's `include` must cover `.vue`:
+   * one that excludes them makes every SFC report "not found in project" instead of linting.
    *
-   * Default: `false`. Turning it on surfaces every previously-invisible type error in your
-   * SFCs at once, so it is opt-in until you are ready for that.
+   * When a precondition fails, the default degrades: the preset says so once and leaves SFCs
+   * linted as before, rather than failing a lint nobody asked it to fail. Setting this to
+   * `true` by hand asks for it explicitly instead, and then an unmet precondition is a hard
+   * error, since silently not doing what you asked for is the worse answer.
+   *
+   * Set `false` to switch it off. That is the lever to reach for on lint time: type-checking
+   * SFC script blocks is the expensive part of a Vue lint.
    */
   vueTypeAware?: boolean
 }
@@ -223,10 +227,16 @@ export async function maninak(
     sortImports,
     requireJsdoc,
     requireJsdocInUtils = false,
-    vueTypeAware = false,
+    vueTypeAware = true,
     tailwind,
     ...antfuOptions
   } = options
+  /*
+   * Whether the consumer asked for SFC type-awareness by name, as opposed to getting it by
+   * default. The two fail differently on purpose: an option someone set should fail loudly
+   * when it cannot be honoured, and one they never mentioned should never fail their lint.
+   */
+  const vueTypeAwareRequested = options.vueTypeAware === true
   const jsdocBlocks = resolveRequireJsdocBlocks(requireJsdoc ?? requireJsdocInUtils)
   const sortImportsBlocks = sortImports ? [buildSortImportsBlock(sortImports)] : []
   const filenameCaseBlocks =
@@ -251,16 +261,33 @@ export async function maninak(
    * its whole lint fail over an option that is merely inapplicable to it.
    */
   const vueEnabled = Boolean(baseOptions.vue)
-  if (vueTypeAware && !vueEnabled) {
+  if (vueTypeAwareRequested && !vueEnabled) {
     console.warn(
       `[@maninak/eslint-config] vueTypeAware is on, but Vue support is off (no "vue" or ` +
         `"nuxt" dependency was detected and "vue" was not passed), so there are no .vue ` +
         `files to lint type-aware. The option is being ignored.`,
     )
   }
-  const typeAwareVue = vueTypeAware && vueEnabled && tsconfigPaths !== undefined
-  if (typeAwareVue) {
-    await assertTsconfigCoversVue(tsconfigPaths[0]!)
+  /*
+   * The tsconfig SFC type-awareness would run against, or `undefined` when a precondition
+   * rules it out. Carrying the path rather than a boolean keeps it narrowed at the two later
+   * uses, which a reassignable flag cannot do.
+   */
+  const typeAwareTsconfig =
+    vueTypeAware && vueEnabled && tsconfigPaths !== undefined ? tsconfigPaths[0]! : undefined
+  let typeAwareVue = typeAwareTsconfig !== undefined
+  if (typeAwareTsconfig !== undefined) {
+    const problem = await findVueTypeAwareProblem(typeAwareTsconfig)
+    if (problem) {
+      if (vueTypeAwareRequested) {
+        throw new Error(`[@maninak/eslint-config] ${problem}`)
+      }
+      console.warn(
+        `[@maninak/eslint-config] type-aware linting stops at the .vue boundary here: ` +
+          `${problem} Pass vueTypeAware: false to silence this.`,
+      )
+      typeAwareVue = false
+    }
   }
   const tsconfigOverride = tsconfigPaths
     ? {
@@ -287,8 +314,8 @@ export async function maninak(
   restoreUnicornRulesOnVue(configs)
 
   // Runs before the legacy switch below so both passes agree on which project mode is active.
-  if (typeAwareVue) {
-    giveVueBlockATypeScriptProject(configs, tsconfigPaths[0]!)
+  if (typeAwareVue && typeAwareTsconfig !== undefined) {
+    giveVueBlockATypeScriptProject(configs, typeAwareTsconfig)
   }
 
   if (tsconfigPaths && tsconfigPaths.length > 1) {
@@ -487,32 +514,32 @@ function dedupePluginRegistrations(configs: TypedFlatConfigItem[]): void {
 }
 
 /**
- * Throws when `tsconfigPath` does not pull `.vue` files into its program while the project
- * clearly has some.
+ * Why type-aware linting cannot reach this project's SFCs, worded for the consumer, or
+ * `undefined` when it can. The caller decides whether that is fatal.
  *
  * A tsconfig whose `include` misses SFCs does not disable type-aware linting for them, it
- * makes
- * every one report `was not found by the project service` as a parse error, so a 138-SFC app
- * answers with 138 opaque failures and no hint of the cause. Nuxt's generated
+ * makes every one report `was not found by the project service` as a parse error, so a
+ * 138-SFC app answers with 138 opaque failures and no hint of the cause. Nuxt's generated
  * `.nuxt/tsconfig.json` covers `.vue`; a hand-rolled one frequently does not.
  *
  * Resolution goes through TypeScript itself, with the same `.vue` extension registration
  * typescript-eslint uses, because `include` entries name directories as often as globs and
- * pattern-matching them by hand gets the answer wrong either way. Stays silent when the
- * project
- * has no SFCs at all, where the option is merely redundant rather than misconfigured.
+ * pattern-matching them by hand gets the answer wrong either way. Reports nothing when the
+ * project has no SFCs at all, where the option is merely redundant rather than misconfigured.
  */
-async function assertTsconfigCoversVue(tsconfigPath: string): Promise<void> {
+async function findVueTypeAwareProblem(tsconfigPath: string): Promise<string | undefined> {
   let loaded
   try {
     loaded = (await import('typescript')).default
   } catch {
     console.warn(
-      `[@maninak/eslint-config] vueTypeAware is on but "typescript" could not be imported, ` +
-        `so whether "${tsconfigPath}" covers .vue files could not be checked.`,
+      `[@maninak/eslint-config] "typescript" could not be imported, so whether ` +
+        `"${tsconfigPath}" covers .vue files could not be checked. Type-aware linting of ` +
+        `SFCs is being left on; if every SFC reports "was not found by the project ` +
+        `service", that is why.`,
     )
 
-    return
+    return undefined
   }
   // Re-bound as a const so the narrowed module type survives into the closure below; a `let`
   // widens back to `any` there.
@@ -525,7 +552,7 @@ async function assertTsconfigCoversVue(tsconfigPath: string): Promise<void> {
     typescript.sys.readFile(file),
   )
   if (configFile.error) {
-    return // Let ESLint report an unreadable tsconfig in its own words.
+    return undefined // Let ESLint report an unreadable tsconfig in its own words.
   }
 
   const parsed = typescript.parseJsonConfigFileContent(
@@ -544,7 +571,7 @@ async function assertTsconfigCoversVue(tsconfigPath: string): Promise<void> {
     ],
   )
   if (parsed.fileNames.some((file) => file.endsWith('.vue'))) {
-    return
+    return undefined
   }
 
   // Only now is a filesystem sweep worth its cost, and only to tell "misconfigured" apart
@@ -554,15 +581,14 @@ async function assertTsconfigCoversVue(tsconfigPath: string): Promise<void> {
     ignore: ['**/node_modules/**', '**/dist/**', '**/.nuxt/**', '**/.output/**'],
   })
   if (sfcs.length === 0) {
-    return
+    return undefined
   }
 
-  throw new Error(
-    `[@maninak/eslint-config] vueTypeAware is on, but "${tsconfigPath}" does not include ` +
-      `any of the ${sfcs.length} .vue files in this project, so each one would report ` +
-      `"was not found by the project service" instead of linting. Add "**/*.vue" to that ` +
-      `tsconfig's "include", point typescript.tsconfigPath at one that covers SFCs (Nuxt ` +
-      `generates .nuxt/tsconfig.json), or set vueTypeAware: false.`,
+  return (
+    `"${tsconfigPath}" does not include any of the ${sfcs.length} .vue files in this ` +
+    `project, so each one would report "was not found by the project service" instead of ` +
+    `linting. Add "**/*.vue" to that tsconfig's "include", or point typescript.tsconfigPath ` +
+    `at one that covers SFCs (Nuxt generates .nuxt/tsconfig.json).`
   )
 }
 
